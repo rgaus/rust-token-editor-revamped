@@ -2,6 +2,19 @@ use std::{
     rc::{Rc, Weak},
     cell::RefCell,
 };
+use colored::Colorize;
+
+#[derive(Debug)]
+enum NodeNextValid {
+    Yes,
+    UnsetExpectedFirstChild,
+    ExpectedFirstChild(NodeMetadata, NodeMetadata),
+    UnsetExpectedNextSibling,
+    ExpectedNextSibling(NodeMetadata, NodeMetadata),
+    UnsetExpectedRecursiveSibling(usize /* levels_upwards_traversed */),
+    ExpectedRecursiveSibling(NodeMetadata, NodeMetadata),
+    SetExpectedEOF(NodeMetadata),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 enum NodeMetadata {
@@ -52,43 +65,223 @@ impl InMemoryNode {
         Self::dump_child(node, "", None);
     }
     fn dump_child(
-        node: &Rc<RefCell<Self>>,
+        wrapped_node: &Rc<RefCell<Self>>,
         spacer: &str,
         parent_expected_index_within_children: Option<usize>,
     ) {
-        let borrowed = node.borrow();
+        let node = wrapped_node.borrow();
 
-        // Check to see if in the parent of the given child, there exists a child at the given
-        // index with matching metadata
-        let found_at_index_in_parent = if let (
-            Some(parent_expected_index_within_children),
-            Some(parent),
-        ) = (parent_expected_index_within_children, borrowed.parent.clone()) {
-            parent.upgrade().map(|parent| {
-                let borrowed_parent = parent.borrow();
-                let child = borrowed_parent.children.get(parent_expected_index_within_children);
-                if let Some(child) = child {
-                    // A child can be found at the expected index in the parent
-                    child.borrow().metadata == borrowed.metadata
+        // Compute validation results on each row
+        let validation_flags = {
+            // Check to see if in the parent of the given child, there exists a child at the given
+            // index with matching metadata
+            let node_was_found_at_expected_index_in_parent = if let (
+                Some(parent_expected_index_within_children),
+                Some(parent),
+            ) = (parent_expected_index_within_children, node.parent.clone()) {
+                parent.upgrade().map(|parent| {
+                    let borrowed_parent = parent.borrow();
+                    let child = borrowed_parent.children.get(parent_expected_index_within_children);
+                    if let Some(child) = child {
+                        // A child can be found at the expected index in the parent
+                        child.borrow().metadata == node.metadata
+                    } else {
+                        // No child can be found at the expected index in the parent
+                        false
+                    }
+                })
+            } else { None };
+
+            // Check to make sure node.first_child and node.last_child are equal to their corresponding
+            // entries in node.children
+            let first_child_set_correctly = if let Some(first_child) = node.first_child.clone() {
+                first_child.upgrade().map(|first_child| {
+                    if node.children.is_empty() {
+                        return false;
+                    }
+
+                    if let Some(first_element_in_children) = node.children.first() {
+                        // The node.first_child value was equivalent to node.children[0]
+                        first_element_in_children.borrow().metadata == first_child.borrow().metadata
+                    } else {
+                        false
+                    }
+                })
+            } else { None };
+            let last_child_set_correctly = if let Some(last_child) = node.last_child.clone() {
+                last_child.upgrade().map(|last_child| {
+                    if node.children.is_empty() {
+                        return false;
+                    }
+
+                    if let Some(last_element_in_children) = node.children.last() {
+                        // The node.last_child value was equivalent to node.children[-1]
+                        last_element_in_children.borrow().metadata == last_child.borrow().metadata
+                    } else {
+                        false
+                    }
+                })
+            } else { None };
+
+            let next_set_correctly = {
+                let node_next = if let Some(node_next) = node.next.clone() {
+                    node_next.upgrade()
                 } else {
-                    // No child can be found at the expected index in the parent
-                    false
+                    None
+                };
+
+                if let Some(first_element_of_node_children) = node.children.first() {
+                    // This node has children, so `node.next` should be the first child
+                    if let Some(node_next) = node_next {
+                        Some(if node_next.borrow().metadata == first_element_of_node_children.borrow().metadata {
+                            NodeNextValid::Yes
+                        } else {
+                            NodeNextValid::ExpectedFirstChild(
+                                node_next.borrow().metadata.clone(),
+                                first_element_of_node_children.borrow().metadata.clone(),
+                            )
+                        })
+                    } else {
+                        Some(NodeNextValid::UnsetExpectedFirstChild)
+                    }
+
+                } else if let Some(parent) = &node.parent {
+                    // This node does not have children, so its next value is its next sibling
+                    // (ie, node.parent.children[(current node index)+1])
+                    parent.upgrade().map(|parent| {
+                        if let Some(next_element_in_children) = parent.borrow().children.get(
+                            if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
+                                parent_expected_index_within_children+1
+                            } else {
+                                0
+                            }
+                        ) {
+                            // The node.next value was equivalent to node.parent.children[(current node index)+1]
+                            return node_next.map_or(
+                                NodeNextValid::UnsetExpectedNextSibling,
+                                |node_next| if next_element_in_children.borrow().metadata == node_next.borrow().metadata {
+                                    NodeNextValid::Yes
+                                } else {
+                                    NodeNextValid::ExpectedNextSibling(
+                                        next_element_in_children.borrow().metadata.clone(),
+                                        node_next.borrow().metadata.clone(),
+                                    )
+                                }
+                            );
+                        }
+
+                        println!("FOO {:?} {:?}", node_next, parent_expected_index_within_children);
+                        // It seems `node` is the last child in `node.parent.children`, so there's
+                        // no "next element" to fetch in parent.children.
+                        //
+                        // So, walk upwards through each node's parents and try to find the next
+                        // sibling "deeply" of the parent node, and THAT is the next node
+                        if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
+                            let mut cursor_index_in_its_parent = parent_expected_index_within_children;
+                            let mut cursor_node = Some(parent);
+                            let mut levels_upwards_traversed = 0;
+                            while let Some(cursor_node_unwrapped) = cursor_node {
+                                let cursor_node_borrowed = cursor_node_unwrapped.borrow();
+                                if let Some(cursor_node_next_sibling) = cursor_node_borrowed.children.get(
+                                    cursor_index_in_its_parent+1
+                                ) {
+                                    // The node.next value was equivalent to node.parent.children[(current node index)+1]
+                                    return node_next.map_or(
+                                        NodeNextValid::UnsetExpectedRecursiveSibling(levels_upwards_traversed),
+                                        |node_next| if cursor_node_next_sibling.borrow().metadata == node_next.borrow().metadata {
+                                            NodeNextValid::Yes
+                                        } else {
+                                            NodeNextValid::ExpectedRecursiveSibling(
+                                                cursor_node_next_sibling.borrow().metadata.clone(),
+                                                node_next.borrow().metadata.clone(),
+                                            )
+                                        }
+                                    );
+                                }
+
+                                let cursor_node_parent = cursor_node_borrowed.parent.clone().map(|parent| parent.upgrade()).flatten();
+                                if let Some(cursor_node_parent) = cursor_node_parent.clone() {
+                                    if let Some(index) = cursor_node_parent.borrow().children.iter().position(
+                                        |n| n.borrow().metadata == cursor_node_unwrapped.borrow().metadata
+                                    ) {
+                                        cursor_index_in_its_parent = index;
+                                    }
+                                }
+
+                                cursor_node = cursor_node_parent;
+                                levels_upwards_traversed += 1;
+                            }
+                        }
+
+                        // If we've walked all the way up to the root node and not found a
+                        // sibling after this, this must be the final leaf node. And in this case,
+                        // node.next should be None.
+                        if let Some(node_next) = node_next {
+                            NodeNextValid::SetExpectedEOF(node_next.borrow().metadata.clone())
+                        } else {
+                            NodeNextValid::Yes
+                        }
+                    })
+
+                } else {
+                    // No parent AND no children? This node seems to be in a tree all on
+                    // its own.
+                    None
                 }
-            })
-        } else { None };
+            };
+
+            // TODO
+            let previous_set_correctly = None;
+
+            let flags = format!(
+                "{} {} {} {} {}",
+                if let Some(result) = node_was_found_at_expected_index_in_parent {
+                    format!("parent?={}", if result { "YES".into() } else { "NO".on_red() })
+                } else { "".into() },
+                if node.metadata == NodeMetadata::Empty {
+                    format!("first_child?={}", match first_child_set_correctly {
+                        Some(true) => "YES".into(),
+                        Some(false) => "NO".on_red(),
+                        None => "N/A".bright_black(),
+                    })
+                } else { "".into() },
+                if node.metadata == NodeMetadata::Empty {
+                    format!("last_child?={}", match last_child_set_correctly {
+                        Some(true) => "YES".into(),
+                        Some(false) => "NO".on_red(),
+                        None => "N/A".bright_black(),
+                    })
+                } else { "".into() },
+                format!("next?={}", match next_set_correctly {
+                    Some(NodeNextValid::Yes) => "YES".into(),
+                    Some(reason) => format!("{reason:?}").on_red(),
+                    None => "N/A".bright_black(),
+                }),
+                format!("previous?={}", match previous_set_correctly {
+                    Some(true) => "YES".into(),
+                    Some(false) => "NO".on_red(),
+                    None => "N/A".bright_black(),
+                }),
+            );
+
+            flags
+        };
 
         println!(
-            "{spacer}{}. metadata={:?} {}",
+            "{spacer}{}. metadata={:?} next={:?} prev={:?}\t\t{}",
             if let Some(index) = parent_expected_index_within_children { format!("{index}") } else { "0".into() },
-            borrowed.metadata,
-            if let Some(result) = found_at_index_in_parent { format!("parent_seemingly_linked_right?={result}") } else { "".into() }
+            node.metadata,
+            node.next.clone().map(|next| next.upgrade()).flatten().map(|next| next.borrow().metadata.clone()),
+            node.previous.clone().map(|previous| previous.upgrade()).flatten().map(|previous| previous.borrow().metadata.clone()),
+            validation_flags,
         );
-        if borrowed.metadata == NodeMetadata::Empty && borrowed.children.is_empty() {
+
+        if node.metadata == NodeMetadata::Empty && node.children.is_empty() {
             println!("{spacer}  (no children)")
         } else {
             let new_spacer = &format!("{spacer}  ");
             let mut counter = 0;
-            for child in &borrowed.children {
+            for child in &node.children {
                 Self::dump_child(child, new_spacer, Some(counter));
                 counter += 1;
             }
@@ -150,7 +343,9 @@ fn main() {
     let parent = InMemoryNode::new_empty();
     let foo = InMemoryNode::new_from_literal("foo");
     let bar = InMemoryNode::new_from_literal("bar");
+    let baz = InMemoryNode::new_from_literal("baz");
 
+    let foo = InMemoryNode::append_child(foo, baz);
     let parent = InMemoryNode::append_child(parent, foo);
     let parent = InMemoryNode::append_child(parent, bar);
 
