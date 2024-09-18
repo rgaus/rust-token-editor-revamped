@@ -1,20 +1,142 @@
 use std::{
     rc::{Rc, Weak},
-    cell::RefCell,
+    cell::RefCell, usize,
 };
 use colored::Colorize;
 
+
+
+
 #[derive(Debug)]
-enum NodeNextValid {
+enum NodeNextValidReason {
     Yes,
     UnsetExpectedFirstChild,
     ExpectedFirstChild(NodeMetadata, NodeMetadata),
     UnsetExpectedNextSibling,
     ExpectedNextSibling(NodeMetadata, NodeMetadata),
-    UnsetExpectedRecursiveSibling(usize /* levels_upwards_traversed */),
+    UnsetExpectedRecursiveSibling(NodeMetadata, usize /* levels_upwards_traversed */),
     ExpectedRecursiveSibling(NodeMetadata, NodeMetadata),
     SetExpectedEOF(NodeMetadata),
+    ParentWeakRefMissing,
+    InIsolatedTree,
 }
+fn validate_node_next(
+    wrapped_node: &Rc<RefCell<InMemoryNode>>,
+    parent_expected_index_within_children: Option<usize>,
+) -> NodeNextValidReason {
+    let node = wrapped_node.borrow();
+
+    let node_next = if let Some(node_next) = node.next.clone() {
+        node_next.upgrade()
+    } else {
+        None
+    };
+
+    if let Some(first_element_of_node_children) = node.children.first() {
+        // This node has children, so `node.next` should be the first child
+        if let Some(node_next) = node_next {
+            if node_next.borrow().metadata == first_element_of_node_children.borrow().metadata {
+                NodeNextValidReason::Yes
+            } else {
+                NodeNextValidReason::ExpectedFirstChild(
+                    node_next.borrow().metadata.clone(),
+                    first_element_of_node_children.borrow().metadata.clone(),
+                )
+            }
+        } else {
+            NodeNextValidReason::UnsetExpectedFirstChild
+        }
+
+    } else if let Some(parent) = &node.parent {
+        // This node does not have children, so its next value is its next sibling
+        // (ie, node.parent.children[(current node index)+1])
+        parent.upgrade().map_or(NodeNextValidReason::ParentWeakRefMissing, |parent| {
+            if let Some(next_element_in_children) = parent.borrow().children.get(
+                if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
+                    parent_expected_index_within_children+1
+                } else {
+                    0
+                }
+            ) {
+                // The node.next value was equivalent to node.parent.children[(current node index)+1]
+                return node_next.map_or(
+                    NodeNextValidReason::UnsetExpectedNextSibling,
+                    |node_next| if next_element_in_children.borrow().metadata == node_next.borrow().metadata {
+                        NodeNextValidReason::Yes
+                    } else {
+                        NodeNextValidReason::ExpectedNextSibling(
+                            next_element_in_children.borrow().metadata.clone(),
+                            node_next.borrow().metadata.clone(),
+                        )
+                    }
+                );
+            }
+
+            // It seems `node` is the last child in `node.parent.children`, so there's
+            // no "next element" to fetch in parent.children.
+            //
+            // So, walk upwards through each node's parents and try to find the next
+            // sibling "deeply" of the parent node, and THAT is the next node
+            if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
+                let mut cursor_index_in_its_parent = parent_expected_index_within_children;
+                let mut cursor_node = Some(parent);
+                let mut levels_upwards_traversed = 0;
+                while let Some(cursor_node_unwrapped) = cursor_node {
+                    let cursor_node_borrowed = cursor_node_unwrapped.borrow();
+                    if let Some(cursor_node_next_sibling) = cursor_node_borrowed.children.get(
+                        cursor_index_in_its_parent+1
+                    ) {
+                        // The node.next value was equivalent to node.parent.children[(current node index)+1]
+                        return node_next.map_or(
+                            NodeNextValidReason::UnsetExpectedRecursiveSibling(
+                                cursor_node_next_sibling.borrow().metadata.clone(),
+                                levels_upwards_traversed,
+                            ),
+                            |node_next| if cursor_node_next_sibling.borrow().metadata == node_next.borrow().metadata {
+                                NodeNextValidReason::Yes
+                            } else {
+                                NodeNextValidReason::ExpectedRecursiveSibling(
+                                    cursor_node_next_sibling.borrow().metadata.clone(),
+                                    node_next.borrow().metadata.clone(),
+                                )
+                            }
+                        );
+                    }
+
+                    let cursor_node_parent = cursor_node_borrowed.parent.clone().map(|parent| parent.upgrade()).flatten();
+                    if let Some(cursor_node_parent) = cursor_node_parent.clone() {
+                        if let Some(index) = cursor_node_parent.borrow().children.iter().position(
+                            |n| n.borrow().metadata == cursor_node_unwrapped.borrow().metadata
+                        ) {
+                            cursor_index_in_its_parent = index;
+                        }
+                    }
+
+                    cursor_node = cursor_node_parent;
+                    levels_upwards_traversed += 1;
+                }
+            }
+
+            // If we've walked all the way up to the root node and not found a
+            // sibling after this, this must be the final leaf node. And in this case,
+            // node.next should be None.
+            if let Some(node_next) = node_next {
+                NodeNextValidReason::SetExpectedEOF(node_next.borrow().metadata.clone())
+            } else {
+                NodeNextValidReason::Yes
+            }
+        })
+
+    } else {
+        // No parent AND no children? This node seems to be in a tree all on
+        // its own.
+        NodeNextValidReason::InIsolatedTree
+    }
+}
+
+
+
+
 
 #[derive(Debug, Clone, PartialEq)]
 enum NodeMetadata {
@@ -123,112 +245,7 @@ impl InMemoryNode {
                 })
             } else { None };
 
-            let next_set_correctly = {
-                let node_next = if let Some(node_next) = node.next.clone() {
-                    node_next.upgrade()
-                } else {
-                    None
-                };
-
-                if let Some(first_element_of_node_children) = node.children.first() {
-                    // This node has children, so `node.next` should be the first child
-                    if let Some(node_next) = node_next {
-                        Some(if node_next.borrow().metadata == first_element_of_node_children.borrow().metadata {
-                            NodeNextValid::Yes
-                        } else {
-                            NodeNextValid::ExpectedFirstChild(
-                                node_next.borrow().metadata.clone(),
-                                first_element_of_node_children.borrow().metadata.clone(),
-                            )
-                        })
-                    } else {
-                        Some(NodeNextValid::UnsetExpectedFirstChild)
-                    }
-
-                } else if let Some(parent) = &node.parent {
-                    // This node does not have children, so its next value is its next sibling
-                    // (ie, node.parent.children[(current node index)+1])
-                    parent.upgrade().map(|parent| {
-                        if let Some(next_element_in_children) = parent.borrow().children.get(
-                            if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
-                                parent_expected_index_within_children+1
-                            } else {
-                                0
-                            }
-                        ) {
-                            // The node.next value was equivalent to node.parent.children[(current node index)+1]
-                            return node_next.map_or(
-                                NodeNextValid::UnsetExpectedNextSibling,
-                                |node_next| if next_element_in_children.borrow().metadata == node_next.borrow().metadata {
-                                    NodeNextValid::Yes
-                                } else {
-                                    NodeNextValid::ExpectedNextSibling(
-                                        next_element_in_children.borrow().metadata.clone(),
-                                        node_next.borrow().metadata.clone(),
-                                    )
-                                }
-                            );
-                        }
-
-                        println!("FOO {:?} {:?}", node_next, parent_expected_index_within_children);
-                        // It seems `node` is the last child in `node.parent.children`, so there's
-                        // no "next element" to fetch in parent.children.
-                        //
-                        // So, walk upwards through each node's parents and try to find the next
-                        // sibling "deeply" of the parent node, and THAT is the next node
-                        if let Some(parent_expected_index_within_children) = parent_expected_index_within_children {
-                            let mut cursor_index_in_its_parent = parent_expected_index_within_children;
-                            let mut cursor_node = Some(parent);
-                            let mut levels_upwards_traversed = 0;
-                            while let Some(cursor_node_unwrapped) = cursor_node {
-                                let cursor_node_borrowed = cursor_node_unwrapped.borrow();
-                                if let Some(cursor_node_next_sibling) = cursor_node_borrowed.children.get(
-                                    cursor_index_in_its_parent+1
-                                ) {
-                                    // The node.next value was equivalent to node.parent.children[(current node index)+1]
-                                    return node_next.map_or(
-                                        NodeNextValid::UnsetExpectedRecursiveSibling(levels_upwards_traversed),
-                                        |node_next| if cursor_node_next_sibling.borrow().metadata == node_next.borrow().metadata {
-                                            NodeNextValid::Yes
-                                        } else {
-                                            NodeNextValid::ExpectedRecursiveSibling(
-                                                cursor_node_next_sibling.borrow().metadata.clone(),
-                                                node_next.borrow().metadata.clone(),
-                                            )
-                                        }
-                                    );
-                                }
-
-                                let cursor_node_parent = cursor_node_borrowed.parent.clone().map(|parent| parent.upgrade()).flatten();
-                                if let Some(cursor_node_parent) = cursor_node_parent.clone() {
-                                    if let Some(index) = cursor_node_parent.borrow().children.iter().position(
-                                        |n| n.borrow().metadata == cursor_node_unwrapped.borrow().metadata
-                                    ) {
-                                        cursor_index_in_its_parent = index;
-                                    }
-                                }
-
-                                cursor_node = cursor_node_parent;
-                                levels_upwards_traversed += 1;
-                            }
-                        }
-
-                        // If we've walked all the way up to the root node and not found a
-                        // sibling after this, this must be the final leaf node. And in this case,
-                        // node.next should be None.
-                        if let Some(node_next) = node_next {
-                            NodeNextValid::SetExpectedEOF(node_next.borrow().metadata.clone())
-                        } else {
-                            NodeNextValid::Yes
-                        }
-                    })
-
-                } else {
-                    // No parent AND no children? This node seems to be in a tree all on
-                    // its own.
-                    None
-                }
-            };
+            let next_set_correctly = validate_node_next(wrapped_node, parent_expected_index_within_children);
 
             // TODO
             let previous_set_correctly = None;
@@ -253,9 +270,9 @@ impl InMemoryNode {
                     })
                 } else { "".into() },
                 format!("next?={}", match next_set_correctly {
-                    Some(NodeNextValid::Yes) => "YES".into(),
-                    Some(reason) => format!("{reason:?}").on_red(),
-                    None => "N/A".bright_black(),
+                    NodeNextValidReason::Yes => "YES".into(),
+                    NodeNextValidReason::InIsolatedTree | NodeNextValidReason::ParentWeakRefMissing => "N/A".bright_black(),
+                    reason => format!("{reason:?}").on_red(),
                 }),
                 format!("previous?={}", match previous_set_correctly {
                     Some(true) => "YES".into(),
