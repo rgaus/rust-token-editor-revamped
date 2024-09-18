@@ -1,10 +1,9 @@
-use std::{
-    rc::{Rc, Weak},
-    cell::RefCell, usize,
-};
-use colored::Colorize;
 use crate::node_debug_validators::{validate_node_next, NodeNextValidReason};
-
+use colored::Colorize;
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeMetadata {
@@ -65,22 +64,26 @@ impl InMemoryNode {
         let validation_flags = {
             // Check to see if in the parent of the given child, there exists a child at the given
             // index with matching metadata
-            let node_was_found_at_expected_index_in_parent = if let (
-                Some(parent_expected_index_within_children),
-                Some(parent),
-            ) = (parent_expected_index_within_children, node.parent.clone()) {
-                parent.upgrade().map(|parent| {
-                    let borrowed_parent = parent.borrow();
-                    let child = borrowed_parent.children.get(parent_expected_index_within_children);
-                    if let Some(child) = child {
-                        // A child can be found at the expected index in the parent
-                        child.borrow().metadata == node.metadata
-                    } else {
-                        // No child can be found at the expected index in the parent
-                        false
-                    }
-                })
-            } else { None };
+            let node_was_found_at_expected_index_in_parent =
+                if let (Some(parent_expected_index_within_children), Some(parent)) =
+                    (parent_expected_index_within_children, node.parent.clone())
+                {
+                    parent.upgrade().map(|parent| {
+                        let borrowed_parent = parent.borrow();
+                        let child = borrowed_parent
+                            .children
+                            .get(parent_expected_index_within_children);
+                        if let Some(child) = child {
+                            // A child can be found at the expected index in the parent
+                            child.borrow().metadata == node.metadata
+                        } else {
+                            // No child can be found at the expected index in the parent
+                            false
+                        }
+                    })
+                } else {
+                    None
+                };
 
             // Check to make sure node.first_child and node.last_child are equal to their corresponding
             // entries in node.children
@@ -97,7 +100,9 @@ impl InMemoryNode {
                         false
                     }
                 })
-            } else { None };
+            } else {
+                None
+            };
             let last_child_set_correctly = if let Some(last_child) = node.last_child.clone() {
                 last_child.upgrade().map(|last_child| {
                     if node.children.is_empty() {
@@ -111,9 +116,12 @@ impl InMemoryNode {
                         false
                     }
                 })
-            } else { None };
+            } else {
+                None
+            };
 
-            let next_set_correctly = validate_node_next(wrapped_node, parent_expected_index_within_children);
+            let next_set_correctly =
+                validate_node_next(wrapped_node, parent_expected_index_within_children);
 
             // TODO
             let previous_set_correctly = None;
@@ -121,32 +129,54 @@ impl InMemoryNode {
             let flags = format!(
                 "{} {} {} {} {}",
                 if let Some(result) = node_was_found_at_expected_index_in_parent {
-                    format!("parent?={}", if result { "YES".into() } else { "NO".on_red() })
-                } else { "".into() },
+                    format!(
+                        "parent?={}",
+                        if result { "YES".into() } else { "NO".on_red() }
+                    )
+                } else {
+                    "".into()
+                },
                 if node.metadata == NodeMetadata::Empty {
-                    format!("first_child?={}", match first_child_set_correctly {
+                    format!(
+                        "first_child?={}",
+                        match first_child_set_correctly {
+                            Some(true) => "YES".into(),
+                            Some(false) => "NO".on_red(),
+                            None => "N/A".bright_black(),
+                        }
+                    )
+                } else {
+                    "".into()
+                },
+                if node.metadata == NodeMetadata::Empty {
+                    format!(
+                        "last_child?={}",
+                        match last_child_set_correctly {
+                            Some(true) => "YES".into(),
+                            Some(false) => "NO".on_red(),
+                            None => "N/A".bright_black(),
+                        }
+                    )
+                } else {
+                    "".into()
+                },
+                format!(
+                    "next?={}",
+                    match next_set_correctly {
+                        NodeNextValidReason::Yes => "YES".into(),
+                        NodeNextValidReason::InIsolatedTree
+                        | NodeNextValidReason::ParentWeakRefMissing => "N/A".bright_black(),
+                        reason => format!("{reason:?}").on_red(),
+                    }
+                ),
+                format!(
+                    "previous?={}",
+                    match previous_set_correctly {
                         Some(true) => "YES".into(),
                         Some(false) => "NO".on_red(),
                         None => "N/A".bright_black(),
-                    })
-                } else { "".into() },
-                if node.metadata == NodeMetadata::Empty {
-                    format!("last_child?={}", match last_child_set_correctly {
-                        Some(true) => "YES".into(),
-                        Some(false) => "NO".on_red(),
-                        None => "N/A".bright_black(),
-                    })
-                } else { "".into() },
-                format!("next?={}", match next_set_correctly {
-                    NodeNextValidReason::Yes => "YES".into(),
-                    NodeNextValidReason::InIsolatedTree | NodeNextValidReason::ParentWeakRefMissing => "N/A".bright_black(),
-                    reason => format!("{reason:?}").on_red(),
-                }),
-                format!("previous?={}", match previous_set_correctly {
-                    Some(true) => "YES".into(),
-                    Some(false) => "NO".on_red(),
-                    None => "N/A".bright_black(),
-                }),
+                    }
+                ),
             );
 
             flags
@@ -154,10 +184,22 @@ impl InMemoryNode {
 
         println!(
             "{spacer}{}. metadata={:?} next={:?} prev={:?}\t\t{}",
-            if let Some(index) = parent_expected_index_within_children { format!("{index}") } else { "0".into() },
+            if let Some(index) = parent_expected_index_within_children {
+                format!("{index}")
+            } else {
+                "0".into()
+            },
             node.metadata,
-            node.next.clone().map(|next| next.upgrade()).flatten().map(|next| next.borrow().metadata.clone()),
-            node.previous.clone().map(|previous| previous.upgrade()).flatten().map(|previous| previous.borrow().metadata.clone()),
+            node.next
+                .clone()
+                .map(|next| next.upgrade())
+                .flatten()
+                .map(|next| next.borrow().metadata.clone()),
+            node.previous
+                .clone()
+                .map(|previous| previous.upgrade())
+                .flatten()
+                .map(|previous| previous.borrow().metadata.clone()),
             validation_flags,
         );
 
@@ -173,10 +215,7 @@ impl InMemoryNode {
         }
     }
 
-    pub fn append_child(
-        parent: Rc<RefCell<Self>>,
-        child: Rc<RefCell<Self>>,
-    ) -> Rc<RefCell<Self>> {
+    pub fn append_child(parent: Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
         {
             let mut child_mut = child.borrow_mut();
 
