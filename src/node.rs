@@ -215,26 +215,54 @@ impl InMemoryNode {
         }
     }
 
+    /// Given a node, gets its "deep last child" - ie, the last child of the last child
+    /// of the ... etc
+    ///
+    /// This is an important value when doing certain relinking operations.
+    pub fn deep_last_child(node: Rc<RefCell<Self>>) -> Option<Rc<RefCell<Self>>> {
+        if node.borrow().last_child.is_none() {
+            return None;
+        };
+
+        let mut cursor = node;
+        loop {
+            let Some(last_child) = cursor.borrow().last_child.clone() else {
+                break;
+            };
+            let Some(upgraded) = last_child.upgrade() else {
+                break;
+            };
+            cursor = upgraded.clone();
+        }
+
+        Some(cursor)
+    }
+
     pub fn append_child(parent: Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
+        println!("CHILD: {:?} PARENT: {:?}", child.borrow().metadata, parent.borrow().metadata);
         {
             let mut child_mut = child.borrow_mut();
 
             // Step 1: Add child.parent to be parent
             (*child_mut).parent = Some(Rc::downgrade(&parent));
 
-            // Step 2: Update child.previous to be (OLD) parent.last_child
-            (*child_mut).previous = parent.borrow().last_child.clone();
+            // Step 2: Update child.next to be (OLD) parent.last_child.next
+            (*child_mut).next = parent.borrow().last_child.clone()
+                .map(|last_child| last_child.upgrade())
+                .flatten()
+                .map(|last_child| last_child.borrow().next.clone())
+                .flatten();
 
-            // Step 3: Update child.next to be (OLD) parent.last_child.next
-            (*child_mut).previous = if let Some(last_child) = parent.borrow().last_child.clone() {
-                if let Some(upgraded) = last_child.upgrade() {
-                    upgraded.borrow().next.clone()
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            // // Step 3: Update child.next to be (OLD) parent.last_child.next
+            // (*child_mut).previous = if let Some(last_child) = parent.borrow().last_child.clone() {
+            //     if let Some(upgraded) = last_child.upgrade() {
+            //         upgraded.borrow().next.clone()
+            //     } else {
+            //         None
+            //     }
+            // } else {
+            //     None
+            // };
         }
 
         {
@@ -243,19 +271,43 @@ impl InMemoryNode {
             // Step 3: Update parent.first_child to be child IF parent.first_child is None
             if parent_mut.first_child.is_none() {
                 (*parent_mut).first_child = Some(Rc::downgrade(&child));
+                println!("a. {:?}.next = {:?}", parent_mut.metadata, child.borrow().metadata);
+                (*parent_mut).next = Some(Rc::downgrade(&child));
             }
 
-            // Step 4: Update parent.last_child.next to be child
-            if let Some(last_child) = &parent_mut.last_child {
-                if let Some(upgraded_last_child) = last_child.upgrade() {
-                    (*upgraded_last_child.borrow_mut()).next = Some(Rc::downgrade(&child));
+            // Step 4: set parent.(OLD) last_child.deep_last_child.next to child
+            if let Some(parent_last_child) = &parent_mut.last_child {
+                if let Some(parent_last_child) = parent_last_child.upgrade() {
+                    if let Some(foo) = Self::deep_last_child(parent_last_child) {
+                        (*foo.borrow_mut()).next = Some(Rc::downgrade(&child));
+                        println!("b. {:?}.next = {:?}", foo.borrow().metadata, child.borrow().metadata);
+                    }
                 }
             }
 
-            // Step 5: Add child into `parent.children`
+            // Step 5: Update parent.(OLD) last_child.next to be child
+            if let Some(last_child) = &parent_mut.last_child {
+                if let Some(upgraded_last_child) = last_child.upgrade() {
+                    let parent_old_last_child = upgraded_last_child.borrow().first_child.clone(); // child.first_child
+
+                    println!(
+                        "c. {:?}.next = {:?}.or({:?})",
+                        upgraded_last_child.borrow().metadata,
+                        parent_old_last_child.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().metadata.clone()),
+                        child.borrow().metadata,
+                    );
+
+                    // parent.(OLD) last_child
+                    // or fall back to the child itself if there are no nodes inside
+                    let new_next = parent_old_last_child.or_else(|| Some(Rc::downgrade(&child)));
+                    (*upgraded_last_child.borrow_mut()).next = new_next;
+                }
+            }
+
+            // Step 6: Add child into `parent.children`
             (*parent_mut).children.push(child.clone());
 
-            // Step 6: Update parent.last_child to be child
+            // Step 7: Update parent.last_child to be child
             (*parent_mut).last_child = Some(Rc::downgrade(&child));
         }
 

@@ -17,5 +17,6 @@ fn main() {
     let parent = InMemoryNode::append_child(parent, foo);
     let parent = InMemoryNode::append_child(parent, bar);
 
+    println!("");
     InMemoryNode::dump(&parent);
 }
