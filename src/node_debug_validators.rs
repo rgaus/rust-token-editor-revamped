@@ -154,3 +154,130 @@ pub fn validate_node_next(
         NodeNextValidReason::InIsolatedTree
     }
 }
+
+
+#[derive(Debug)]
+pub enum NodePreviousValidReason {
+    Yes,
+    UnsetExpectedParent,
+    ExpectedParent(NodeMetadata, NodeMetadata),
+    UnsetExpectedPreviousSiblingDeepLastChild,
+    ExpectedPreviousSiblingDeepLastChild(NodeMetadata, NodeMetadata, usize /* levels_downwards_traversed */),
+    UnsetExpectedPreviousSibling,
+    ExpectedPreviousSibling(NodeMetadata, NodeMetadata),
+    ExpectedParentlessNodeToHavePreviousNone(NodeMetadata),
+    ParentWeakRefMissing,
+    InIsolatedTree,
+}
+
+pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodePreviousValidReason {
+    let node = wrapped_node.borrow();
+
+    let node_previous = if let Some(node_previous) = node.previous.clone() {
+        node_previous.upgrade()
+    } else {
+        None
+    };
+
+    if let Some(parent) = &node.parent {
+        if let Some(parent_upgraded) = parent.upgrade() {
+            let parent_children = &parent_upgraded.borrow().children;
+            let node_index_in_parent = parent_children.iter().position(|n| nodes_equal_by_hueristic(n, wrapped_node));
+            // println!("FOO: {:?} {:?}", node.metadata, node_index_in_parent);
+
+            // 1. Is this node the first sibling of its parent? Then the previous is `parent`.
+            if let (Some(0), Some(first_sibling_of_parent)) = (node_index_in_parent, parent_children.first()) {
+                if let Some(node_previous) = node_previous {
+                    if nodes_equal_by_hueristic(&node_previous, first_sibling_of_parent) {
+                        NodePreviousValidReason::Yes
+                    } else {
+                        NodePreviousValidReason::ExpectedParent(
+                            first_sibling_of_parent.borrow().metadata.clone(),
+                            node_previous.borrow().metadata.clone(),
+                        )
+                    }
+                } else {
+                    NodePreviousValidReason::UnsetExpectedParent
+                }
+
+            // 2. Does the node have at least one sibling before it?
+            } else if let Some(node_index_in_parent) = node_index_in_parent {
+                if node_index_in_parent == 0 {
+                    panic!("Error: node_index_in_parent == 0, but this should be impossible because this is what #1 checks for!");
+                }
+                let previous_sibling_index_in_parent = node_index_in_parent - 1;
+                let previous_sibling_in_parent = &parent_children[previous_sibling_index_in_parent];
+
+                // a. Does this previous sibling have children? If so, get the deep last child of that
+                // previous sibling, and that should be `previous`
+                //
+                // NOTE: the below is a reimplementation of `InMemoryNode::deep_last_child` which
+                // does not rely on anything except for `children` being properly set in each node.
+                let (
+                    previous_sibling_deep_last_child,
+                    levels_downwards_traversed,
+                ) = if let Some(initial_last_child) = previous_sibling_in_parent.borrow().children.last().clone() {
+                    let mut cursor_node = initial_last_child.clone();
+                    let mut levels_downwards_traversed = 0;
+                    loop {
+                        let cursor_node_cloned = cursor_node.borrow().clone();
+                        let Some(last_child) = cursor_node_cloned.children.last().clone() else {
+                            break;
+                        };
+                        cursor_node = last_child.clone();
+                        levels_downwards_traversed += 1;
+                    }
+
+                    (Some(cursor_node), levels_downwards_traversed)
+                } else {
+                    (None, 0)
+                };
+
+                if let Some(previous_sibling_deep_last_child) = previous_sibling_deep_last_child {
+                    if let Some(node_previous) = node_previous {
+                        if nodes_equal_by_hueristic(&node_previous, &previous_sibling_deep_last_child.clone()) {
+                            NodePreviousValidReason::Yes
+                        } else {
+                            NodePreviousValidReason::ExpectedPreviousSiblingDeepLastChild(
+                                previous_sibling_deep_last_child.borrow().metadata.clone(),
+                                node_previous.borrow().metadata.clone(),
+                                levels_downwards_traversed,
+                            )
+                        }
+                    } else {
+                        NodePreviousValidReason::UnsetExpectedPreviousSiblingDeepLastChild
+                    }
+                } else {
+                    // b. If the previous sibling does not have children, then `previous` is that sibling
+                    if let Some(node_previous) = node_previous {
+                        if nodes_equal_by_hueristic(&node_previous, previous_sibling_in_parent) {
+                            NodePreviousValidReason::Yes
+                        } else {
+                            NodePreviousValidReason::ExpectedPreviousSibling(
+                                previous_sibling_in_parent.borrow().metadata.clone(),
+                                node_previous.borrow().metadata.clone(),
+                            )
+                        }
+                    } else {
+                        NodePreviousValidReason::UnsetExpectedPreviousSibling
+                    }
+                }
+            } else {
+                // No parent AND no children? This node seems to be in a tree all on
+                // its own.
+                NodePreviousValidReason::InIsolatedTree
+            }
+        } else {
+            NodePreviousValidReason::ParentWeakRefMissing
+        }
+    } else {
+        // 3. Does this node not have a parent? Then `previous` is None
+        if let Some(node_previous) = node_previous {
+            NodePreviousValidReason::ExpectedParentlessNodeToHavePreviousNone(
+                node_previous.borrow().metadata.clone()
+            )
+        } else {
+            NodePreviousValidReason::Yes
+        }
+    }
+}

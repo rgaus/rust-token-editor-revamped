@@ -1,4 +1,9 @@
-use crate::node_debug_validators::{validate_node_next, NodeNextValidReason};
+use crate::node_debug_validators::{
+    NodeNextValidReason,
+    validate_node_next,
+    NodePreviousValidReason,
+    validate_node_previous,
+};
 use colored::Colorize;
 use std::{
     cell::RefCell,
@@ -124,7 +129,7 @@ impl InMemoryNode {
                 validate_node_next(wrapped_node, parent_expected_index_within_children);
 
             // TODO
-            let previous_set_correctly = None;
+            let previous_set_correctly = validate_node_previous(wrapped_node);
 
             let flags = format!(
                 "{} {} {} {} {}",
@@ -172,9 +177,9 @@ impl InMemoryNode {
                 format!(
                     "previous?={}",
                     match previous_set_correctly {
-                        Some(true) => "YES".into(),
-                        Some(false) => "NO".on_red(),
-                        None => "N/A".bright_black(),
+                        NodePreviousValidReason::Yes => "YES".into(),
+                        NodePreviousValidReason::ParentWeakRefMissing | NodePreviousValidReason::InIsolatedTree => "N/A".bright_black(),
+                        reason => format!("{reason:?}").on_red(),
                     }
                 ),
             );
