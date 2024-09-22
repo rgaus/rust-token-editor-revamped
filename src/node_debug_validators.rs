@@ -1,6 +1,13 @@
 use crate::node::{InMemoryNode, NodeMetadata};
 use std::{cell::RefCell, rc::Rc};
 
+/// Currently, there is no way to check to see if nodes that could be copies of each other are
+/// equal. I may add an id or something like that. Until then, check to see if their metadata
+/// matches, which should be good enough a large percentage of the time.
+fn nodes_equal_by_hueristic(a: &Rc<RefCell<InMemoryNode>>, b: &Rc<RefCell<InMemoryNode>>) -> bool {
+    a.borrow().metadata == b.borrow().metadata
+}
+
 #[derive(Debug)]
 pub enum NodeNextValidReason {
     Yes,
@@ -34,7 +41,7 @@ pub fn validate_node_next(
     if let Some(first_element_of_node_children) = node.children.first() {
         // This node has children, so `node.next` should be the first child
         if let Some(node_next) = node_next {
-            if node_next.borrow().metadata == first_element_of_node_children.borrow().metadata {
+            if nodes_equal_by_hueristic(&node_next, first_element_of_node_children) {
                 NodeNextValidReason::Yes
             } else {
                 NodeNextValidReason::ExpectedFirstChild(
@@ -64,9 +71,7 @@ pub fn validate_node_next(
                     return node_next.map_or(
                         NodeNextValidReason::UnsetExpectedNextSibling,
                         |node_next| {
-                            if next_element_in_children.borrow().metadata
-                                == node_next.borrow().metadata
-                            {
+                            if nodes_equal_by_hueristic(&node_next, next_element_in_children) {
                                 NodeNextValidReason::Yes
                             } else {
                                 NodeNextValidReason::ExpectedNextSibling(
@@ -102,9 +107,7 @@ pub fn validate_node_next(
                                     levels_upwards_traversed,
                                 ),
                                 |node_next| {
-                                    if cursor_node_next_sibling.borrow().metadata
-                                        == node_next.borrow().metadata
-                                    {
+                                    if nodes_equal_by_hueristic(&node_next, cursor_node_next_sibling) {
                                         NodeNextValidReason::Yes
                                     } else {
                                         NodeNextValidReason::ExpectedRecursiveSibling(
@@ -124,7 +127,7 @@ pub fn validate_node_next(
                         if let Some(cursor_node_parent) = cursor_node_parent.clone() {
                             if let Some(index) =
                                 cursor_node_parent.borrow().children.iter().position(|n| {
-                                    n.borrow().metadata == cursor_node_unwrapped.borrow().metadata
+                                    nodes_equal_by_hueristic(n, &cursor_node_unwrapped)
                                 })
                             {
                                 cursor_index_in_its_parent = index;
