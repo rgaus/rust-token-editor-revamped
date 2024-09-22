@@ -253,10 +253,14 @@ impl InMemoryNode {
 
             // Step 2: Update child.next to be parent.(OLD) last_child.next
             (*child_mut).next = parent.borrow().last_child.clone()
-                .map(|last_child| last_child.upgrade())
-                .flatten()
-                .map(|last_child| last_child.borrow().next.clone())
-                .flatten();
+                .map(|last_child| last_child.upgrade()).flatten()
+                .map(|last_child| if let Some(deep_last_child) = Self::deep_last_child(last_child.clone()) {
+                    deep_last_child.borrow().next.clone()
+                } else {
+                    last_child.borrow().next.clone()
+                }).flatten()
+                .or_else(|| child_mut.first_child.clone());
+            println!("a. {:?}.next = {:?}", child_mut.metadata, child_mut.next.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().metadata.clone()));
 
             // Step N: make the new child's previous either:
             //         a. parent.(OLD) last_child.deep_last_child (if the old last_child has
@@ -288,7 +292,7 @@ impl InMemoryNode {
             // Step 3: Update parent.first_child to be child IF parent.first_child is None
             if parent_mut.first_child.is_none() {
                 (*parent_mut).first_child = Some(Rc::downgrade(&child));
-                println!("a. {:?}.next = {:?}", parent_mut.metadata, child.borrow().metadata);
+                println!("b. {:?}.next = {:?}", parent_mut.metadata, child.borrow().metadata);
                 (*parent_mut).next = Some(Rc::downgrade(&child));
             }
 
@@ -297,7 +301,7 @@ impl InMemoryNode {
                 if let Some(parent_last_child) = parent_last_child.upgrade() {
                     if let Some(foo) = Self::deep_last_child(parent_last_child) {
                         (*foo.borrow_mut()).next = Some(Rc::downgrade(&child));
-                        println!("b. {:?}.next = {:?}", foo.borrow().metadata, child.borrow().metadata);
+                        println!("c. {:?}.next = {:?}", foo.borrow().metadata, child.borrow().metadata);
                     }
                 }
             }
@@ -308,7 +312,7 @@ impl InMemoryNode {
                     let parent_old_last_child = upgraded_last_child.borrow().first_child.clone(); // child.first_child
 
                     println!(
-                        "c. {:?}.next = {:?}.or({:?})",
+                        "d. {:?}.next = {:?}.or({:?})",
                         upgraded_last_child.borrow().metadata,
                         parent_old_last_child.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().metadata.clone()),
                         child.borrow().metadata,
