@@ -186,13 +186,13 @@ pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodeP
             // println!("FOO: {:?} {:?}", node.metadata, node_index_in_parent);
 
             // 1. Is this node the first sibling of its parent? Then the previous is `parent`.
-            if let (Some(0), Some(first_sibling_of_parent)) = (node_index_in_parent, parent_children.first()) {
+            if let Some(0) = node_index_in_parent {
                 if let Some(node_previous) = node_previous {
-                    if nodes_equal_by_hueristic(&node_previous, first_sibling_of_parent) {
+                    if nodes_equal_by_hueristic(&node_previous, &parent_upgraded) {
                         NodePreviousValidReason::Yes
                     } else {
                         NodePreviousValidReason::ExpectedParent(
-                            first_sibling_of_parent.borrow().metadata.clone(),
+                            parent_upgraded.borrow().metadata.clone(),
                             node_previous.borrow().metadata.clone(),
                         )
                     }

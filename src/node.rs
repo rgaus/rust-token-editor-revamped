@@ -251,14 +251,26 @@ impl InMemoryNode {
             // Step 1: Add child.parent to be parent
             (*child_mut).parent = Some(Rc::downgrade(&parent));
 
-            // Step 2: Update child.next to be (OLD) parent.last_child.next
+            // Step 2: Update child.next to be parent.(OLD) last_child.next
             (*child_mut).next = parent.borrow().last_child.clone()
                 .map(|last_child| last_child.upgrade())
                 .flatten()
                 .map(|last_child| last_child.borrow().next.clone())
                 .flatten();
 
-            // // Step 3: Update child.next to be (OLD) parent.last_child.next
+            // Step N: make the new child's previous either:
+            //         a. parent.(OLD) last_child.deep_last_child (if the old last_child has
+            //                                                     children of its own)
+            //         b. parent.(OLD) last_child
+            //         c. parent (if this is the first child being added to the parent)
+            (*child_mut).previous = parent.borrow().last_child.clone() // a
+                .map(|n| n.upgrade()).flatten()
+                .map(|n| Self::deep_last_child(n)).flatten()
+                .map(|n| Rc::downgrade(&n))
+                .or_else(|| parent.borrow().last_child.clone()) // b
+                .or_else(|| Some(Rc::downgrade(&parent))); // c
+
+            // // Step 3: Update child.next to be parent.(OLD) last_child.next
             // (*child_mut).previous = if let Some(last_child) = parent.borrow().last_child.clone() {
             //     if let Some(upgraded) = last_child.upgrade() {
             //         upgraded.borrow().next.clone()
