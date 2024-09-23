@@ -33,19 +33,14 @@ pub struct InMemoryNode {
 
 impl InMemoryNode {
     pub fn new_empty() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            metadata: NodeMetadata::Empty,
-            parent: None,
-            children: vec![],
-            first_child: None,
-            last_child: None,
-            next: None,
-            previous: None,
-        }))
+        Self::new_with_metadata(NodeMetadata::Empty)
     }
     pub fn new_from_literal(literal: &str) -> Rc<RefCell<Self>> {
+        Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
+    }
+    pub fn new_with_metadata(metadata: NodeMetadata) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            metadata: NodeMetadata::Literal(literal.into()),
+            metadata: metadata,
             parent: None,
             children: vec![],
             first_child: None,
