@@ -243,7 +243,7 @@ impl InMemoryNode {
         Some(cursor)
     }
 
-    pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> &Rc<RefCell<Self>> {
+    pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
         println!("CHILD: {:?} PARENT: {:?}", child.borrow().metadata, parent.borrow().metadata);
         {
             let mut child_mut = child.borrow_mut();
@@ -331,19 +331,17 @@ impl InMemoryNode {
             // Step 7: Update parent.last_child to be child
             (*parent_mut).last_child = Some(Rc::downgrade(&child));
         }
-
-        parent
     }
 
     /// Removes a child node from a tree. Returns the parent node of the removed node, or None if
     /// the node that was removed was at the top level.
-    pub fn remove_child_at_index(parent: &Rc<RefCell<Self>>, index: usize) -> &Rc<RefCell<Self>> {
+    pub fn remove_child_at_index(parent: &Rc<RefCell<Self>>, index: usize) {
         println!("REMOVE: {:?} INDEX: {:?}", parent.borrow().metadata, index);
         let (child, previous_child, deep_last_child) = {
-            let parent_borrowed = parent.borrow();
-            let child = parent_borrowed.children.get(index);
+            let parent = parent.borrow();
+            let child = parent.children.get(index);
             let Some(child) = child else {
-                return parent;
+                return;
             };
 
             let previous_child = child.borrow().previous.clone().map(|p| p.upgrade()).flatten();
@@ -381,7 +379,5 @@ impl InMemoryNode {
             // Remove the node from `children`, which should cause the child's memory to get freed
             (*parent_mut).children.remove(index);
         }
-
-        parent
     }
 }
