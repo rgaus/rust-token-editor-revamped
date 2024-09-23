@@ -14,6 +14,7 @@ use std::{
 pub enum NodeMetadata {
     Empty,
     Literal(String),
+    Whitespace(String),
 }
 
 #[derive(Debug, Clone)]

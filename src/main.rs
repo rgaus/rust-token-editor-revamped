@@ -1,9 +1,21 @@
 mod node;
 mod node_debug_validators;
+mod mini_js;
 
 use node::InMemoryNode;
 
 fn main() {
+    // let foo = mini_js::parse_string(r#"
+    //     {
+    //         foo
+    //         {
+    //             bar
+    //         }
+    //     }
+    // "#);
+    // println!("");
+    // InMemoryNode::dump(&foo);
+
     let parent = InMemoryNode::new_empty();
     let foo = InMemoryNode::new_from_literal("foo");
     let bar = InMemoryNode::new_from_literal("bar");
