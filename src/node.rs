@@ -243,7 +243,7 @@ impl InMemoryNode {
         Some(cursor)
     }
 
-    pub fn append_child(parent: Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
+    pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> &Rc<RefCell<Self>> {
         println!("CHILD: {:?} PARENT: {:?}", child.borrow().metadata, parent.borrow().metadata);
         {
             let mut child_mut = child.borrow_mut();
@@ -330,6 +330,56 @@ impl InMemoryNode {
 
             // Step 7: Update parent.last_child to be child
             (*parent_mut).last_child = Some(Rc::downgrade(&child));
+        }
+
+        parent
+    }
+
+    /// Removes a child node from a tree. Returns the parent node of the removed node, or None if
+    /// the node that was removed was at the top level.
+    pub fn remove_child_at_index(parent: &Rc<RefCell<Self>>, index: usize) -> &Rc<RefCell<Self>> {
+        println!("REMOVE: {:?} INDEX: {:?}", parent.borrow().metadata, index);
+        let (child, previous_child, deep_last_child) = {
+            let parent_borrowed = parent.borrow();
+            let child = parent_borrowed.children.get(index);
+            let Some(child) = child else {
+                return parent;
+            };
+
+            let previous_child = child.borrow().previous.clone().map(|p| p.upgrade()).flatten();
+            let deep_last_child = Self::deep_last_child(child.clone());
+
+            (child.clone(), previous_child.clone(), deep_last_child)
+        };
+
+        // Step 1: child_mut.previous.next = child_mut.next
+        // println!("PREV: {:?}", previous_child.clone().map(|p| p.borrow().metadata.clone()));
+        if let Some(previous_child) = previous_child {
+            (*previous_child.borrow_mut()).next = Self::deep_last_child(child.clone()).or(Some(child.clone())).map(|n| n.borrow().next.clone()).flatten();
+        };
+
+        // Step 2: child_mut.deep_last_child.next.previous = child_mut.previous
+        if let Some(deep_last_child) = deep_last_child {
+            let deep_last_child_next = deep_last_child.borrow().next.clone();
+            if let Some(Some(deep_last_child_next)) = deep_last_child_next.map(|n| n.upgrade()) {
+                (*deep_last_child_next.borrow_mut()).previous = child.borrow().previous.clone();
+            }
+        };
+
+        {
+            let mut parent_mut = parent.borrow_mut();
+            let max_child_index = parent_mut.children.len()-1;
+
+            // Step N: Reassign first_child / last_childto no longer take into account the child
+            if index == 0 {
+                (*parent_mut).first_child = parent_mut.children.get(1).map(|child| Rc::downgrade(child));
+            }
+            if index == max_child_index {
+                (*parent_mut).last_child = parent_mut.children.get(max_child_index-1).map(|child| Rc::downgrade(child));
+            }
+
+            // Remove the node from `children`, which should cause the child's memory to get freed
+            (*parent_mut).children.remove(index);
         }
 
         parent

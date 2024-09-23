@@ -21,13 +21,19 @@ fn main() {
     // let parent = InMemoryNode::append_child(parent, bar);
 
     // Test 2:
-    let foo = InMemoryNode::append_child(foo, bar);
-    let foo = InMemoryNode::append_child(foo, baz);
-    let quux = InMemoryNode::append_child(quux, hello);
-    let quux = InMemoryNode::append_child(quux, world);
+    InMemoryNode::append_child(&foo, bar);
+    InMemoryNode::append_child(&foo, baz);
+    InMemoryNode::append_child(&quux, hello);
+    InMemoryNode::append_child(&quux, world);
 
-    let parent = InMemoryNode::append_child(parent, foo);
-    let parent = InMemoryNode::append_child(parent, quux);
+    InMemoryNode::append_child(&parent, foo);
+    InMemoryNode::append_child(&parent, quux);
+
+    println!("");
+    InMemoryNode::dump(&parent);
+
+    println!("");
+    InMemoryNode::remove_child_at_index(&parent, 0);
 
     println!("");
     InMemoryNode::dump(&parent);
