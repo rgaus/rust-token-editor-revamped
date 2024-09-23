@@ -239,6 +239,8 @@ impl InMemoryNode {
         Some(cursor)
     }
 
+    // TODO: prepend_child
+
     pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
         println!("CHILD: {:?} PARENT: {:?}", child.borrow().metadata, parent.borrow().metadata);
         {
@@ -374,6 +376,85 @@ impl InMemoryNode {
 
             // Remove the node from `children`, which should cause the child's memory to get freed
             (*parent_mut).children.remove(index);
+        }
+    }
+
+    /// When called, swaps the child within `parent` at `index` with the `new_child`.
+    /// If `new_child` itself has children, this subtree is spliced in to replace the old child.
+    pub fn swap_child_at_index(parent: &Rc<RefCell<Self>>, index: usize, new_child: Rc<RefCell<Self>>) {
+        println!("SWAP: {:?} INDEX: {} NEW: {:?}", parent.borrow().metadata, index, new_child.borrow().metadata);
+
+        let (old_child, old_child_previous, old_child_deep_last_child) = {
+            let parent = parent.borrow();
+            let old_child = parent.children.get(index);
+            let Some(old_child) = old_child else {
+                return;
+            };
+
+            let previous_child = old_child.borrow().previous.clone().map(|p| p.upgrade()).flatten();
+            let deep_last_child = Self::deep_last_child(old_child.clone());
+
+            (old_child.clone(), previous_child.clone(), deep_last_child)
+        };
+
+        let new_child_deep_last_child = Self::deep_last_child(new_child.clone());
+
+        {
+            let mut new_child_mut = new_child.borrow_mut();
+
+            // Step N: Update new_child.parent to the common parent
+            (*new_child_mut).parent = Some(Rc::downgrade(parent));
+
+            // Step N: Relink the old_child.previous's next to point to new_child
+            if let Some(old_previous) = old_child_previous.clone() {
+                old_previous.borrow_mut().next = Some(Rc::downgrade(&new_child));
+            }
+
+            // Step N: Relink the old_child.next's previous to point to new_child.deep_last_child
+            if let Some(new_child_deep_last_child) = new_child_deep_last_child {
+                (*new_child_deep_last_child.borrow_mut()).next = old_child_deep_last_child.clone()
+                    .map(|n| n.borrow().next.clone()).flatten()
+                    .or_else(|| old_child.borrow().next.clone());
+            } else {
+                (*new_child_mut).next = old_child_deep_last_child.clone()
+                    .map(|n| n.borrow().next.clone()).flatten()
+                    .or_else(|| old_child.borrow().next.clone());
+            }
+
+            // Step N: Update new_child.next to be old_child.deep_last_child.next
+            (*new_child_mut).next = if let Some(deep_last_child) = old_child_deep_last_child.clone() {
+                deep_last_child.borrow().next.clone()
+            } else {
+                old_child.borrow().next.clone()
+            };
+
+            // Step N: Update the next sibling of old_child to point back to it
+            //         ie, old_child.(OLD) deep_last_child,next.previous to new_child
+            if let Some(deep_last_child_next) = old_child_deep_last_child.clone().map(|n| n.borrow().next.clone()).flatten().map(|n| n.upgrade()).flatten() {
+                (*deep_last_child_next.borrow_mut()).previous = Some(Rc::downgrade(&new_child));
+            } else if let Some(old_child_next) = old_child.borrow().next.clone().map(|n| n.upgrade()).flatten() {
+                (*old_child_next.borrow_mut()).next = Some(Rc::downgrade(&new_child));
+            };
+
+            // Step N: Update new_child.previous to be old_child.previous
+            (*new_child_mut).previous = old_child.borrow().previous.clone();
+        }
+
+        {
+            let mut parent_mut = parent.borrow_mut();
+            let max_child_index = parent_mut.children.len()-1;
+
+            // Step N: Reassign first_child / last_child to point to new_child, if required
+            if index == 0 {
+                (*parent_mut).first_child = Some(Rc::downgrade(&new_child));
+            }
+            if index == max_child_index {
+                (*parent_mut).last_child = Some(Rc::downgrade(&new_child));
+            }
+
+            // Step N: remove old child and add new child in its place
+            (*parent_mut).children.remove(index);
+            (*parent_mut).children.insert(index, new_child);
         }
     }
 }
