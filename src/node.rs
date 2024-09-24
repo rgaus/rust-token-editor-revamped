@@ -11,10 +11,10 @@ use std::{
 };
 
 // An enum used by seek_forwards_until to control how seeking should commence.
-pub enum SeekResult {
-    Continue, // Seek to the next token
+pub enum NodeSeek<Item> {
+    Continue(Item), // Seek to the next token
     Stop, // Finish and don't include this token
-    Done, // Finish and do include this token
+    Done(Item), // Finish and do include this token
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -468,23 +468,23 @@ impl InMemoryNode {
     /// Given a starting node `node`, seek forwards via next, calling `until_fn` repeatedly for
     /// each node to determine how to proceed.
     ///
-    /// Returns an iterator of nodes that have been matched.
-    pub fn seek_forwards_until<T>(
+    /// Returns an iterator of the return value of each call to `until_fn` that have been properly matched.
+    pub fn seek_forwards_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
-        until_fn: T,
-    ) -> std::vec::IntoIter<Rc<RefCell<InMemoryNode>>> where T: Fn(&Rc<RefCell<Self>>, usize) -> SeekResult {
+        until_fn: UntilFn,
+    ) -> std::vec::IntoIter<ResultItem> where UntilFn: Fn(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem> {
         let Some(mut cursor) = node.borrow().next.clone().map(|n| n.upgrade()).flatten() else {
             // This node.next is None, so bail early
             return (vec![]).into_iter();
         };
 
-        let mut output_nodes = vec![];
+        let mut output = vec![];
         let mut iteration_counter: usize = 0;
         loop {
             match until_fn(&cursor, iteration_counter) {
-                SeekResult::Continue => {
+                NodeSeek::Continue(result) => {
                     // Continue looping to the next node!
-                    output_nodes.push(cursor.clone());
+                    output.push(result);
 
                     let cursor_next = cursor.borrow().next.clone().map(|n| n.upgrade()).flatten();
                     let Some(cursor_next) = cursor_next else {
@@ -496,14 +496,14 @@ impl InMemoryNode {
                     iteration_counter += 1;
                     continue;
                 },
-                SeekResult::Stop => { break; },
-                SeekResult::Done => {
-                    output_nodes.push(cursor.clone());
+                NodeSeek::Stop => { break; },
+                NodeSeek::Done(result) => {
+                    output.push(result);
                     break;
                 },
             }
         }
 
-        output_nodes.into_iter()
+        output.into_iter()
     }
 }

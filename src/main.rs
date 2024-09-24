@@ -2,7 +2,7 @@ mod node;
 mod node_debug_validators;
 mod mini_js;
 
-use node::{InMemoryNode, SeekResult};
+use node::{InMemoryNode, NodeSeek};
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
@@ -56,11 +56,11 @@ fn main() {
     // InMemoryNode::dump(&parent);
 
     // let results = InMemoryNode::seek_forwards_until(&parent, |_node, _ct| SeekResult::Continue);
-    let results = InMemoryNode::seek_forwards_until(&parent, |_node, ct| {
+    let results = InMemoryNode::seek_forwards_until(&parent, |node, ct| {
         if ct < 3 {
-            SeekResult::Continue
+            NodeSeek::Continue(node.clone())
         } else {
-            SeekResult::Stop
+            NodeSeek::Stop
         }
     });
     // println!("RESULTS: {:?}", results);
