@@ -482,8 +482,8 @@ impl InMemoryNode {
     /// Returns an iterator of the return value of each call to `until_fn` that have been properly matched.
     pub fn seek_forwards_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
-        until_fn: UntilFn,
-    ) -> std::vec::IntoIter<ResultItem> where UntilFn: Fn(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem> {
+        mut until_fn: UntilFn,
+    ) -> std::vec::IntoIter<ResultItem> where UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem> {
         let Some(mut cursor) = node.borrow().next.clone().map(|n| n.upgrade()).flatten() else {
             // This node.next is None, so bail early
             return (vec![]).into_iter();

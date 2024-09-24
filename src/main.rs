@@ -1,8 +1,11 @@
 mod node;
 mod node_debug_validators;
 mod mini_js;
+mod cursor;
 
 use node::{InMemoryNode, NodeSeek};
+
+use crate::cursor::CursorSeek;
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
@@ -56,14 +59,24 @@ fn main() {
     // InMemoryNode::dump(&parent);
 
     // let results = InMemoryNode::seek_forwards_until(&parent, |_node, _ct| SeekResult::Continue);
-    let results = InMemoryNode::seek_forwards_until(&parent, |node, ct| {
-        if ct < 3 {
-            NodeSeek::Continue(node.clone())
+    // let results = InMemoryNode::seek_forwards_until(&parent, |node, ct| {
+    //     if ct < 3 {
+    //         NodeSeek::Continue(node.clone())
+    //     } else {
+    //         NodeSeek::Stop
+    //     }
+    // });
+    // // println!("RESULTS: {:?}", results);
+    // let string = results.fold("".into(), |acc, node| format!("{acc} {:?}", node.borrow().metadata));
+    // println!("STRING: {:?}", string);
+
+    let mut cur = cursor::Cursor::new(parent);
+    let output = cur.seek_forwards_until(|_character, ct| {
+        if ct == 5 {
+            CursorSeek::Continue
         } else {
-            NodeSeek::Stop
+            CursorSeek::Stop
         }
     });
-    // println!("RESULTS: {:?}", results);
-    let string = results.fold("".into(), |acc, node| format!("{acc} {:?}", node.borrow().metadata));
-    println!("STRING: {:?}", string);
+    println!("STRING: {:?}", output);
 }
