@@ -10,6 +10,13 @@ use std::{
     rc::{Rc, Weak},
 };
 
+// An enum used by seek_forwards_until to control how seeking should commence.
+pub enum SeekResult {
+    Continue, // Seek to the next token
+    Stop, // Finish and don't include this token
+    Done, // Finish and do include this token
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeMetadata {
     Empty,
@@ -456,5 +463,47 @@ impl InMemoryNode {
             (*parent_mut).children.remove(index);
             (*parent_mut).children.insert(index, new_child);
         }
+    }
+
+    /// Given a starting node `node`, seek forwards via next, calling `until_fn` repeatedly for
+    /// each node to determine how to proceed.
+    ///
+    /// Returns an iterator of nodes that have been matched.
+    pub fn seek_forwards_until<T>(
+        node: &Rc<RefCell<Self>>,
+        until_fn: T,
+    ) -> std::vec::IntoIter<Rc<RefCell<InMemoryNode>>> where T: Fn(&Rc<RefCell<Self>>, usize) -> SeekResult {
+        let Some(mut cursor) = node.borrow().next.clone().map(|n| n.upgrade()).flatten() else {
+            // This node.next is None, so bail early
+            return (vec![]).into_iter();
+        };
+
+        let mut output_nodes = vec![];
+        let mut iteration_counter: usize = 0;
+        loop {
+            match until_fn(&cursor, iteration_counter) {
+                SeekResult::Continue => {
+                    // Continue looping to the next node!
+                    output_nodes.push(cursor.clone());
+
+                    let cursor_next = cursor.borrow().next.clone().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_next) = cursor_next else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_next;
+                    iteration_counter += 1;
+                    continue;
+                },
+                SeekResult::Stop => { break; },
+                SeekResult::Done => {
+                    output_nodes.push(cursor.clone());
+                    break;
+                },
+            }
+        }
+
+        output_nodes.into_iter()
     }
 }

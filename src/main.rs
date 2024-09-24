@@ -2,7 +2,7 @@ mod node;
 mod node_debug_validators;
 mod mini_js;
 
-use node::InMemoryNode;
+use node::{InMemoryNode, SeekResult};
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
@@ -39,17 +39,31 @@ fn main() {
     InMemoryNode::append_child(&quux, world);
 
     InMemoryNode::append_child(&parent, foo);
-    InMemoryNode::append_child(&parent, quux);
+    InMemoryNode::append_child(&parent, quux.clone());
 
     println!("");
     InMemoryNode::dump(&parent);
 
+    // // Remove test:
     // println!("");
     // InMemoryNode::remove_child_at_index(&parent, 0);
 
-    let new_child = InMemoryNode::new_from_literal("NEW");
-    InMemoryNode::swap_child_at_index(&parent, 0, new_child);
+    // // Swap test:
+    // let new_child = InMemoryNode::new_from_literal("NEW");
+    // InMemoryNode::swap_child_at_index(&parent, 0, new_child);
 
-    println!("");
-    InMemoryNode::dump(&parent);
+    // println!("");
+    // InMemoryNode::dump(&parent);
+
+    // let results = InMemoryNode::seek_forwards_until(&parent, |_node, _ct| SeekResult::Continue);
+    let results = InMemoryNode::seek_forwards_until(&parent, |_node, ct| {
+        if ct < 3 {
+            SeekResult::Continue
+        } else {
+            SeekResult::Stop
+        }
+    });
+    // println!("RESULTS: {:?}", results);
+    let string = results.fold("".into(), |acc, node| format!("{acc} {:?}", node.borrow().metadata));
+    println!("STRING: {:?}", string);
 }
