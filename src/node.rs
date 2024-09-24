@@ -223,6 +223,17 @@ impl InMemoryNode {
         }
     }
 
+    pub fn literal(node: &Rc<RefCell<Self>>) -> String {
+        if let NodeMetadata::Literal(literal) = node.borrow().metadata.clone() {
+            literal
+        } else {
+            "".into()
+        }
+    }
+    pub fn set_literal(node: &Rc<RefCell<Self>>, new_literal: &str) {
+        (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
+    }
+
     /// Given a node, gets its "deep last child" - ie, the last child of the last child
     /// of the ... etc
     ///
