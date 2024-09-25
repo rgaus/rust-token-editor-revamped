@@ -22,7 +22,7 @@ impl Cursor {
 
     /// When called, seeks forward starting at the cursor position character by character through
     /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_forwards_until<UntilFn>(self: &mut Self, until_fn: UntilFn) -> String
+    pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
     where
         UntilFn: Fn(char, usize) -> CursorSeek,
     {
@@ -149,17 +149,16 @@ impl Cursor {
             NodeSeek::Continue(result)
         });
 
-        self.node = new_node;
-        self.offset = new_offset;
-
-        resulting_chars
+        let output_string = resulting_chars
             .flat_map(|vector| vector.into_iter())
-            .collect::<String>()
+            .collect::<String>();
+
+        (Self::new_at(new_node, new_offset), output_string)
     }
 
     /// When called, performs the given `seek` operation once, causing the cursor to seek forwards
     /// by the given amount
-    pub fn seek_forwards(self: &mut Self, seek: CursorSeek) -> String {
+    pub fn seek_forwards(self: &Self, seek: CursorSeek) -> (Self, String) {
         self.seek_forwards_until(|_character, index| {
             if index == 0 {
                 seek.clone()

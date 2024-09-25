@@ -87,7 +87,7 @@ fn main() {
     // })));
     // let output = cur.seek_forwards(CursorSeek::advance_until_char_then_stop(' '));
     // let output = cur.seek_forwards(CursorSeek::advance_until_char_then_done(' '));
-    let output = cur.seek_forwards(CursorSeek::advance_upper_word(CursorInclusivity::Exclusive));
+    let (cur, output) = cur.seek_forwards(CursorSeek::advance_upper_word(Inclusivity::Exclusive));
     // let output = cur.seek_forwards(CursorSeek::advance_lower_word(CursorInclusivity::Exclusive));
     // let output = cur.seek_forwards(CursorSeek::advance_upper_word(CursorInclusivity::Inclusive));
     println!("STRING: {:?}", output);
