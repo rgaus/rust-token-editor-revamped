@@ -107,7 +107,10 @@ pub fn validate_node_next(
                                     levels_upwards_traversed,
                                 ),
                                 |node_next| {
-                                    if nodes_equal_by_hueristic(&node_next, cursor_node_next_sibling) {
+                                    if nodes_equal_by_hueristic(
+                                        &node_next,
+                                        cursor_node_next_sibling,
+                                    ) {
                                         NodeNextValidReason::Yes
                                     } else {
                                         NodeNextValidReason::ExpectedRecursiveSibling(
@@ -155,14 +158,17 @@ pub fn validate_node_next(
     }
 }
 
-
 #[derive(Debug)]
 pub enum NodePreviousValidReason {
     Yes,
     UnsetExpectedParent,
     ExpectedParent(NodeMetadata, NodeMetadata),
     UnsetExpectedPreviousSiblingDeepLastChild,
-    ExpectedPreviousSiblingDeepLastChild(NodeMetadata, NodeMetadata, usize /* levels_downwards_traversed */),
+    ExpectedPreviousSiblingDeepLastChild(
+        NodeMetadata,
+        NodeMetadata,
+        usize, /* levels_downwards_traversed */
+    ),
     UnsetExpectedPreviousSibling,
     ExpectedPreviousSibling(NodeMetadata, NodeMetadata),
     ExpectedParentlessNodeToHavePreviousNone(NodeMetadata),
@@ -182,7 +188,9 @@ pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodeP
     if let Some(parent) = &node.parent {
         if let Some(parent_upgraded) = parent.upgrade() {
             let parent_children = &parent_upgraded.borrow().children;
-            let node_index_in_parent = parent_children.iter().position(|n| nodes_equal_by_hueristic(n, wrapped_node));
+            let node_index_in_parent = parent_children
+                .iter()
+                .position(|n| nodes_equal_by_hueristic(n, wrapped_node));
             // println!("FOO: {:?} {:?}", node.metadata, node_index_in_parent);
 
             // 1. Is this node the first sibling of its parent? Then the previous is `parent`.
@@ -213,29 +221,32 @@ pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodeP
                 //
                 // NOTE: the below is a reimplementation of `InMemoryNode::deep_last_child` which
                 // does not rely on anything except for `children` being properly set in each node.
-                let (
-                    previous_sibling_deep_last_child,
-                    levels_downwards_traversed,
-                ) = if let Some(initial_last_child) = previous_sibling_in_parent.borrow().children.last().clone() {
-                    let mut cursor_node = initial_last_child.clone();
-                    let mut levels_downwards_traversed = 0;
-                    loop {
-                        let cursor_node_cloned = cursor_node.borrow().clone();
-                        let Some(last_child) = cursor_node_cloned.children.last().clone() else {
+                let (previous_sibling_deep_last_child, levels_downwards_traversed) =
+                    if let Some(initial_last_child) =
+                        previous_sibling_in_parent.borrow().children.last().clone()
+                    {
+                        let mut cursor_node = initial_last_child.clone();
+                        let mut levels_downwards_traversed = 0;
+                        loop {
+                            let cursor_node_cloned = cursor_node.borrow().clone();
+                            let Some(last_child) = cursor_node_cloned.children.last().clone() else {
                             break;
                         };
-                        cursor_node = last_child.clone();
-                        levels_downwards_traversed += 1;
-                    }
+                            cursor_node = last_child.clone();
+                            levels_downwards_traversed += 1;
+                        }
 
-                    (Some(cursor_node), levels_downwards_traversed)
-                } else {
-                    (None, 0)
-                };
+                        (Some(cursor_node), levels_downwards_traversed)
+                    } else {
+                        (None, 0)
+                    };
 
                 if let Some(previous_sibling_deep_last_child) = previous_sibling_deep_last_child {
                     if let Some(node_previous) = node_previous {
-                        if nodes_equal_by_hueristic(&node_previous, &previous_sibling_deep_last_child.clone()) {
+                        if nodes_equal_by_hueristic(
+                            &node_previous,
+                            &previous_sibling_deep_last_child.clone(),
+                        ) {
                             NodePreviousValidReason::Yes
                         } else {
                             NodePreviousValidReason::ExpectedPreviousSiblingDeepLastChild(
@@ -274,7 +285,7 @@ pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodeP
         // 3. Does this node not have a parent? Then `previous` is None
         if let Some(node_previous) = node_previous {
             NodePreviousValidReason::ExpectedParentlessNodeToHavePreviousNone(
-                node_previous.borrow().metadata.clone()
+                node_previous.borrow().metadata.clone(),
             )
         } else {
             NodePreviousValidReason::Yes

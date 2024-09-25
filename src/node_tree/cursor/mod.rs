@@ -1,2 +1,2 @@
 mod cursor;
-pub use cursor::{Cursor, CursorSeek, CursorInclusivity};
+pub use cursor::{Cursor, CursorInclusivity, CursorSeek};
