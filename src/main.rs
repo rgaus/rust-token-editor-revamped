@@ -3,6 +3,8 @@ mod node_debug_validators;
 mod mini_js;
 mod cursor;
 
+use std::rc::Rc;
+
 use node::{InMemoryNode, NodeSeek};
 
 use crate::cursor::{Cursor, CursorSeek, CursorSeekAdvanceUntil};
@@ -22,7 +24,7 @@ fn main() {
     let parent = InMemoryNode::new_empty();
     let foo = InMemoryNode::new_from_literal("foo");
     let bar = InMemoryNode::new_from_literal("bar");
-    let baz = InMemoryNode::new_from_literal("baz");
+    let baz = InMemoryNode::new_from_literal("baz ");
     let quux = InMemoryNode::new_from_literal("quux");
     let hello = InMemoryNode::new_from_literal("hello");
     let world = InMemoryNode::new_from_literal("world");
@@ -81,8 +83,9 @@ fn main() {
     //     }
     // });
     // let output = cur.seek_forwards(CursorSeek::AdvanceByCharCount(5));
-    let output = cur.seek_forwards(CursorSeek::AdvanceUntil(|c| {
-        if c == 'w' { CursorSeekAdvanceUntil::Stop } else { CursorSeekAdvanceUntil::Continue }
-    }));
+    // let output = cur.seek_forwards(CursorSeek::AdvanceUntil(Rc::new(|c| {
+    //     if c == 'w' { CursorSeekAdvanceUntil::Stop } else { CursorSeekAdvanceUntil::Continue }
+    // })));
+    let output = cur.seek_forwards(CursorSeek::advance_until_char_then_stop(' '));
     println!("STRING: {:?}", output);
 }

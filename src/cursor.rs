@@ -8,13 +8,37 @@ pub enum CursorSeekAdvanceUntil {
 }
 
 // An enum used by seek_forwards_until to control how seeking should commence.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum CursorSeek {
     Continue, // Seek to the next character
     Stop, // Finish and don't include this character
     Done, // Finish and do include this character
     AdvanceByCharCount(usize), // Advance by N chars before checking again
-    AdvanceUntil(fn(char) -> CursorSeekAdvanceUntil), // Advance until the given `until_fn` check passes
+    AdvanceUntil(Rc<dyn Fn(char) -> CursorSeekAdvanceUntil>), // Advance until the given `until_fn` check passes
+}
+
+impl CursorSeek {
+    pub fn advance_until<T>(until_fn: T) -> Self where T: Fn(char) -> CursorSeekAdvanceUntil + 'static {
+        CursorSeek::AdvanceUntil(Rc::new(until_fn))
+    }
+    pub fn advance_until_char_then_done(character: char) -> Self {
+        CursorSeek::advance_until(move |c| {
+            if c == character {
+                CursorSeekAdvanceUntil::Done
+            } else {
+                CursorSeekAdvanceUntil::Continue
+            }
+        })
+    }
+    pub fn advance_until_char_then_stop(character: char) -> Self {
+        CursorSeek::advance_until(move |c| {
+            if c == character {
+                CursorSeekAdvanceUntil::Stop
+            } else {
+                CursorSeekAdvanceUntil::Continue
+            }
+        })
+    }
 }
 
 pub struct Cursor {
@@ -41,7 +65,7 @@ impl Cursor {
         let mut new_node = self.node.clone();
 
         let mut cached_char_until_count: Option<usize> = None;
-        let mut cached_char_until_fn: Option<fn(char) -> CursorSeekAdvanceUntil> = None;
+        let mut cached_char_until_fn: Option<Rc<dyn Fn(char) -> CursorSeekAdvanceUntil>> = None;
 
         let resulting_chars = InMemoryNode::seek_forwards_until(&self.node, |node, _ct| {
             new_node = node.clone();
@@ -64,7 +88,7 @@ impl Cursor {
                 }
 
                 // If there's a char_until_fn, then run until that passes
-                if let Some(char_until_fn) = cached_char_until_fn {
+                if let Some(char_until_fn) = &cached_char_until_fn {
                     match char_until_fn(character) {
                         CursorSeekAdvanceUntil::Continue => {
                             result.push(character);
@@ -99,7 +123,7 @@ impl Cursor {
                     },
                     CursorSeek::AdvanceUntil(char_until_fn) => {
                         result.push(character);
-                        cached_char_until_fn = Some(char_until_fn.clone());
+                        cached_char_until_fn = Some(char_until_fn);
                         continue;
                     },
                     CursorSeek::Stop => {
