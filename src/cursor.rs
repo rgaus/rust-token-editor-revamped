@@ -1,12 +1,6 @@
 use std::{rc::Rc, cell::RefCell};
 use crate::node::{InMemoryNode, NodeSeek};
 
-pub enum CursorSeekAdvanceUntil {
-    Continue,
-    Stop,
-    Done,
-}
-
 pub enum CursorInclusivity {
     Inclusive,
     Exclusive,
@@ -19,50 +13,138 @@ pub enum CursorSeek {
     Stop, // Finish and don't include this character
     Done, // Finish and do include this character
     AdvanceByCharCount(usize), // Advance by N chars before checking again
-    AdvanceUntil(Rc<dyn Fn(char) -> CursorSeekAdvanceUntil>), // Advance until the given `until_fn` check passes
+    AdvanceUntil { // Advance until the given `until_fn` check passes
+        until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
+    },
 }
 
 impl CursorSeek {
-    pub fn advance_until<T>(until_fn: T) -> Self where T: Fn(char) -> CursorSeekAdvanceUntil + 'static {
-        CursorSeek::AdvanceUntil(Rc::new(until_fn))
+    pub fn advance_until<T>(until_fn: T) -> Self where T: FnMut(char, usize) -> CursorSeek + 'static {
+        CursorSeek::AdvanceUntil {
+            until_fn: Rc::new(RefCell::new(until_fn)),
+        }
     }
     pub fn advance_until_char_then_done(character: char) -> Self {
-        CursorSeek::advance_until(move |c| {
+        CursorSeek::advance_until(move |c, _i| {
             if c == character {
-                CursorSeekAdvanceUntil::Done
+                CursorSeek::Done
             } else {
-                CursorSeekAdvanceUntil::Continue
+                CursorSeek::Continue
             }
         })
     }
     pub fn advance_until_char_then_stop(character: char) -> Self {
-        CursorSeek::advance_until(move |c| {
+        CursorSeek::advance_until(move |c, _i| {
             if c == character {
-                CursorSeekAdvanceUntil::Stop
+                CursorSeek::Stop
             } else {
-                CursorSeekAdvanceUntil::Continue
+                CursorSeek::Continue
             }
         })
     }
+
     pub fn advance_lower_word(inclusive: CursorInclusivity) -> Self {
         let char_of_value_255 = char::from_u32(255).unwrap();
 
-        // letters / digits / underscores
-        //
-        CursorSeek::advance_until(move |c| {
+        let final_seek = match inclusive {
+            CursorInclusivity::Inclusive => CursorSeek::Done,
+            CursorInclusivity::Exclusive => CursorSeek::Stop,
+        };
+
+        let mut hit_word_char = false;
+        let mut bail_on_next = false;
+
+        // From :h word -
+        // A word consists of a sequence of letters, digits and underscores, or a
+        // sequence of other non-blank characters, separated with white space (spaces,
+        // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
+        // is also considered to be a word.
+        CursorSeek::advance_until(move |c, _i| {
+            let final_seek = final_seek.clone();
+
+            if bail_on_next {
+                return final_seek;
+            };
+
             // set iskeyword? @,48-57,_,192-255
             if c > char_of_value_255 || (c >= '0' && c <= '9') || c == '_' || (c >= 'A' && c <= char_of_value_255)  {
-                CursorSeekAdvanceUntil::Continue
-            // } else if c === 10 {
-            //     CursorSeekAdvanceUntil::Continue
+                hit_word_char = true;
+                println!("a");
+                // If a word character, keep going
+                CursorSeek::Continue
+            } else if !hit_word_char && c == '\n' {
+                println!("b");
+                bail_on_next = true;
+                // If a newling, then advance until whitespace after that new line stops
+                CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Stop
+                })
+            } else if !hit_word_char && c.is_whitespace() {
+                println!("c");
+                bail_on_next = true;
+                // If whitespace, then advance until the whitespace finishes, then resume the word
+                // checking logic
+                CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Stop
+                })
             } else {
-                match inclusive {
-                    CursorInclusivity::Inclusive => CursorSeekAdvanceUntil::Done,
-                    CursorInclusivity::Exclusive => CursorSeekAdvanceUntil::Stop,
-                }
+                final_seek.clone()
             }
         })
     }
+
+    pub fn advance_upper_word(inclusive: CursorInclusivity) -> Self {
+        let final_seek = match inclusive {
+            CursorInclusivity::Inclusive => CursorSeek::Done,
+            CursorInclusivity::Exclusive => CursorSeek::Stop,
+        };
+
+        let mut hit_word_char = false;
+        let mut bail_on_next = false;
+
+        // From :h WORD -
+        // A WORD consists of a sequence of non-blank characters, separated with white
+        // space.  An empty line is also considered to be a WORD.
+        CursorSeek::advance_until(move |c, _i| {
+            let final_seek = final_seek.clone();
+
+            if bail_on_next {
+                return final_seek;
+            };
+
+            if !c.is_whitespace() {
+                // If a word character, keep going
+                hit_word_char = true;
+                CursorSeek::Continue
+            } else if !hit_word_char && c == '\n' {
+                bail_on_next = true;
+                CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Stop
+                })
+            } else if !hit_word_char && c.is_whitespace() {
+                // If whitespace, then advance until the whitespace finishes, then resume the word
+                // checking logic
+                bail_on_next = true;
+                CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Stop
+                })
+            } else {
+                final_seek.clone()
+            }
+        })
+    }
+
+    // Note that `e` is always inclusive, ie `cw`, `de`, and `e` all end up with the cursor in
+    // the same end spot
+    // TODO: pub fn advance_lower_end() -> Self {
 }
 
 pub struct Cursor {
@@ -84,12 +166,19 @@ impl Cursor {
         self: &mut Self,
         until_fn: UntilFn,
     ) -> String where UntilFn: Fn(char, usize) -> CursorSeek {
-        let mut global_char_counter = 0;
+        let mut global_char_counter = 0; // Store a global count of characters processed
+
+        // The final node and offset values:
         let mut new_offset = self.offset;
         let mut new_node = self.node.clone();
 
-        let mut cached_char_until_count: Option<usize> = None;
-        let mut cached_char_until_fn: Option<Rc<dyn Fn(char) -> CursorSeekAdvanceUntil>> = None;
+        // To handle CursorSeek::AdvanceByCharCount(n), keep a counter of characters to ekip:
+        let mut cached_char_until_count = 0;
+
+        // To handle CursorSeek::AdvanceUntil(...), keep a stack of `until_fn`s and their
+        // corresponding counts - these should always have the same length:
+        let mut advance_until_fn_stack: Vec<Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>> = vec![];
+        let mut advance_until_char_counter_stack: Vec<usize> = vec![];
 
         let resulting_chars = InMemoryNode::seek_forwards_until(&self.node, |node, _ct| {
             new_node = node.clone();
@@ -100,35 +189,63 @@ impl Cursor {
             let node_literal = InMemoryNode::literal(node);
             let mut iterator = node_literal.chars();
             while let Some(character) = iterator.next() {
+                println!("CHAR: {}", character);
                 // If there's a char_until_count, then run until that exhausts iself
-                if let Some(char_until_count) = cached_char_until_count {
-                    if char_until_count > 1 {
-                        result.push(character);
-                        cached_char_until_count = Some(char_until_count-1);
+                if cached_char_until_count > 0 {
+                    result.push(character);
+                    cached_char_until_count -= 1;
+                    if cached_char_until_count > 0 {
                         continue;
-                    } else {
-                        cached_char_until_count = None;
                     }
                 }
 
                 // If there's a char_until_fn, then run until that passes
-                if let Some(char_until_fn) = &cached_char_until_fn {
-                    match char_until_fn(character) {
-                        CursorSeekAdvanceUntil::Continue => {
+                if let (
+                    Some(advance_until_fn),
+                    Some(advance_until_char_counter),
+                ) = (&advance_until_fn_stack.last(), advance_until_char_counter_stack.last()) {
+                    let value = {
+                        let mut until_fn_borrowed_mut = advance_until_fn.borrow_mut();
+                        until_fn_borrowed_mut(character, *advance_until_char_counter)
+                    };
+
+                    match value {
+                        CursorSeek::Continue => {
                             result.push(character);
                             global_char_counter += 1;
                             new_offset += 1;
+                            *advance_until_char_counter_stack.last_mut().unwrap() += 1;
+                            println!("... CONTINUE? {:?}", advance_until_char_counter_stack);
                             continue;
                         },
-                        CursorSeekAdvanceUntil::Stop => {
-                            cached_char_until_fn = None;
+                        CursorSeek::AdvanceByCharCount(n) => {
+                            result.push(character);
+                            cached_char_until_count += n;
+                            continue;
                         },
-                        CursorSeekAdvanceUntil::Done => {
+                        CursorSeek::AdvanceUntil{ until_fn: char_until_fn } => {
+                            result.push(character);
+                            advance_until_fn_stack.push(char_until_fn);
+                            advance_until_char_counter_stack.push(0);
+                            println!("... PUSH! {:?}", advance_until_char_counter_stack);
+                            continue;
+                        },
+                        CursorSeek::Stop => {
+                            advance_until_fn_stack.pop();
+                            advance_until_char_counter_stack.pop();
+                            println!("... STOP? {:?}", advance_until_char_counter_stack);
+                        },
+                        CursorSeek::Done => {
                             result.push(character);
                             global_char_counter += 1;
                             new_offset += 1;
-                            cached_char_until_fn = None;
+                            advance_until_fn_stack.pop();
+                            advance_until_char_counter_stack.pop();
+                            println!("... DONE? {:?}", advance_until_char_counter_stack);
                         },
+                    }
+                    if !advance_until_fn_stack.is_empty() || !advance_until_char_counter_stack.is_empty() {
+                        continue;
                     }
                 }
 
@@ -142,12 +259,14 @@ impl Cursor {
                     },
                     CursorSeek::AdvanceByCharCount(n) => {
                         result.push(character);
-                        cached_char_until_count = Some(n);
+                        cached_char_until_count += n;
                         continue;
                     },
-                    CursorSeek::AdvanceUntil(char_until_fn) => {
+                    CursorSeek::AdvanceUntil{ until_fn: char_until_fn } => {
                         result.push(character);
-                        cached_char_until_fn = Some(char_until_fn);
+                        advance_until_fn_stack.push(char_until_fn);
+                        advance_until_char_counter_stack.push(0);
+                        println!("PUSH!");
                         continue;
                     },
                     CursorSeek::Stop => {
