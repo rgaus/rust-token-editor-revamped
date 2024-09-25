@@ -7,7 +7,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
-// An enum used by seek_forwards_until to control how seeking should commence.
+/// An enum used by seek_forwards_until to control how seeking should commence.
 pub enum NodeSeek<Item> {
     Continue(Item), // Seek to the next token
     Stop,           // Finish and don't include this token
@@ -21,6 +21,10 @@ pub enum NodeMetadata {
     Whitespace(String),
 }
 
+/// A node is the building block of a node tree, and repreents a node in an AST-like structure.
+/// Nodes are linked both as a tree (ie, parent / children / etc) as well as doubly linked as a
+/// linked list (ie, next / previous) to allow for fast traversal both linearly (ie, for printing
+/// outputs) and hierarchically (ie, for performing language server like tasks)
 #[derive(Debug, Clone)]
 pub struct InMemoryNode {
     pub metadata: NodeMetadata,
@@ -45,7 +49,7 @@ impl InMemoryNode {
     }
     pub fn new_with_metadata(metadata: NodeMetadata) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            metadata: metadata,
+            metadata,
             parent: None,
             children: vec![],
             first_child: None,

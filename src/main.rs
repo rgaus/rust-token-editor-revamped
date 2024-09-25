@@ -3,8 +3,9 @@ mod node_tree;
 use std::rc::Rc;
 
 use crate::node_tree::{
-    cursor::{Cursor, CursorInclusivity, CursorSeek},
+    cursor::{Cursor, CursorSeek},
     node::{InMemoryNode, NodeSeek},
+    utils::Inclusivity,
 };
 
 fn main() {
