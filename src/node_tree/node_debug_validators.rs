@@ -1,4 +1,4 @@
-use crate::node::{InMemoryNode, NodeMetadata};
+use crate::node_tree::node::{InMemoryNode, NodeMetadata};
 use std::{cell::RefCell, rc::Rc};
 
 /// Currently, there is no way to check to see if nodes that could be copies of each other are

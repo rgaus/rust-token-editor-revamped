@@ -1,4 +1,4 @@
-use crate::node_debug_validators::{
+use crate::node_tree::node_debug_validators::{
     NodeNextValidReason,
     validate_node_next,
     NodePreviousValidReason,

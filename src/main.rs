@@ -1,13 +1,11 @@
-mod node;
-mod node_debug_validators;
-mod mini_js;
-mod cursor;
+mod node_tree;
 
 use std::rc::Rc;
 
-use node::{InMemoryNode, NodeSeek};
-
-use crate::cursor::{Cursor, CursorSeek, CursorInclusivity};
+use crate::node_tree::{
+    node::{InMemoryNode, NodeSeek},
+    cursor::{Cursor, CursorSeek, CursorInclusivity},
+};
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
@@ -88,7 +86,7 @@ fn main() {
     // })));
     // let output = cur.seek_forwards(CursorSeek::advance_until_char_then_stop(' '));
     // let output = cur.seek_forwards(CursorSeek::advance_until_char_then_done(' '));
-    let output = cur.seek_forwards(CursorSeek::advance_lower_word(CursorInclusivity::Inclusive));
+    let output = cur.seek_forwards(CursorSeek::advance_upper_word(CursorInclusivity::Exclusive));
     // let output = cur.seek_forwards(CursorSeek::advance_lower_word(CursorInclusivity::Exclusive));
     // let output = cur.seek_forwards(CursorSeek::advance_upper_word(CursorInclusivity::Inclusive));
     println!("STRING: {:?}", output);

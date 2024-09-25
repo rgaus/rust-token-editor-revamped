@@ -1,5 +1,5 @@
 use std::{rc::Rc, cell::RefCell};
-use crate::node::{InMemoryNode, NodeSeek};
+use crate::node_tree::node::{InMemoryNode, NodeSeek};
 
 pub enum CursorInclusivity {
     Inclusive,
