@@ -1,6 +1,7 @@
 use crate::node_tree::{
     cursor::CursorSeek,
     node::{InMemoryNode, NodeSeek},
+    utils::{Direction, Inclusivity},
 };
 use std::{cell::RefCell, rc::Rc, fmt::Debug};
 
@@ -29,9 +30,9 @@ impl Cursor {
         Self { node, offset }
     }
 
-    /// When called, seeks forward starting at the cursor position character by character through
-    /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
+    /// When called, seeks starting at the cursor position character by character through the node
+    /// structure in the giren `direction` until the given `until_fn` returns either `Stop` or `Done`.
+    pub fn seek_until<UntilFn>(self: &Self, direction: Direction, until_fn: UntilFn) -> (Self, String)
     where
         UntilFn: Fn(char, usize) -> CursorSeek,
     {
@@ -50,19 +51,53 @@ impl Cursor {
             vec![];
         let mut advance_until_char_counter_stack: Vec<usize> = vec![];
 
-        let resulting_chars = InMemoryNode::seek_forwards_until(&self.node, |node, _ct| {
+        let resulting_char_vectors = InMemoryNode::seek_until(&self.node, direction, Inclusivity::Inclusive, |node, ct| {
             new_node = node.clone();
-            new_offset = 0;
             let mut result = vec![];
 
-            // Iterate over all characters within the node, one by one, until a match occurs:
             let node_literal = InMemoryNode::literal(node);
             let mut iterator = node_literal.chars();
-            while let Some(character) = iterator.next() {
+            if ct == 0 {
+                // If this is the first node, skip forward / backward `self.offset` times.
+                match direction {
+                    Direction::Forwards => {
+                        // Seek from the start to the offset
+                        for _ in 0..self.offset {
+                            iterator.next();
+                        };
+                    },
+                    Direction::Backwards => {
+                        // Seek from the end to the offset from the start
+                        for _ in 0..(node_literal.len()-self.offset) {
+                            iterator.next_back();
+                        };
+                    },
+                };
+            } else {
+                // If this is not the first node, then make sure to reset the offset to either the
+                // start or end of the node so that increments / decrements later are operating on
+                // the right value.
+                new_offset = match direction {
+                    Direction::Forwards => 0,
+                    Direction::Backwards => node_literal.len(),
+                };
+            };
+            println!("ITERATOR: '{}' {:?}", node_literal, iterator);
+
+            // Iterate over all characters within the node, one by one, until a match occurs:
+            while let Some(character) = match direction {
+                Direction::Forwards => iterator.next(),
+                Direction::Backwards => iterator.next_back(),
+            } {
                 println!("CHAR: {}", character);
                 // If there's a char_until_count, then run until that exhausts iself
                 if cached_char_until_count > 0 {
                     result.push(character);
+                    global_char_counter += 1;
+                    new_offset = match direction {
+                        Direction::Forwards => new_offset + 1,
+                        Direction::Backwards => new_offset - 1,
+                    };
                     cached_char_until_count -= 1;
                     if cached_char_until_count > 0 {
                         continue;
@@ -83,7 +118,10 @@ impl Cursor {
                         CursorSeek::Continue => {
                             result.push(character);
                             global_char_counter += 1;
-                            new_offset += 1;
+                            new_offset = match direction {
+                                Direction::Forwards => new_offset + 1,
+                                Direction::Backwards => new_offset - 1,
+                            };
                             *advance_until_char_counter_stack.last_mut().unwrap() += 1;
                             println!("... CONTINUE? {:?}", advance_until_char_counter_stack);
                             continue;
@@ -110,7 +148,10 @@ impl Cursor {
                         CursorSeek::Done => {
                             result.push(character);
                             global_char_counter += 1;
-                            new_offset += 1;
+                            new_offset = match direction {
+                                Direction::Forwards => new_offset + 1,
+                                Direction::Backwards => new_offset - 1,
+                            };
                             advance_until_fn_stack.pop();
                             advance_until_char_counter_stack.pop();
                             println!("... DONE? {:?}", advance_until_char_counter_stack);
@@ -123,8 +164,12 @@ impl Cursor {
                     }
                 }
 
+                println!("OFFSET: {:?}", new_offset);
                 global_char_counter += 1;
-                new_offset += 1;
+                new_offset = match direction {
+                    Direction::Forwards => new_offset + 1,
+                    Direction::Backwards => new_offset - 1,
+                };
 
                 match until_fn(character, global_char_counter - 1) {
                     CursorSeek::Continue => {
@@ -158,17 +203,51 @@ impl Cursor {
             NodeSeek::Continue(result)
         });
 
-        let output_string = resulting_chars
-            .flat_map(|vector| vector.into_iter())
-            .collect::<String>();
+        // Once all the seeks have been performed, take the vectors of caracters seeked through
+        // from each node and flatten them all together into a string.
+        let resulting_chars = resulting_char_vectors.flat_map(|vector| vector.into_iter());
+        let output_string = match direction {
+            Direction::Forwards => resulting_chars.collect::<String>(),
+            Direction::Backwards => resulting_chars.rev().collect::<String>(),
+        };
 
         (Self::new_at(new_node, new_offset), output_string)
+    }
+
+    /// When called, seeks forward starting at the cursor position character by character through
+    /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
+    pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
+    where
+        UntilFn: Fn(char, usize) -> CursorSeek,
+    {
+        self.seek_until(Direction::Forwards, until_fn)
     }
 
     /// When called, performs the given `seek` operation once, causing the cursor to seek forwards
     /// by the given amount
     pub fn seek_forwards(self: &Self, seek: CursorSeek) -> (Self, String) {
         self.seek_forwards_until(|_character, index| {
+            if index == 0 {
+                seek.clone()
+            } else {
+                CursorSeek::Stop
+            }
+        })
+    }
+
+    /// When called, seeks backward starting at the cursor position character by character through
+    /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
+    pub fn seek_backwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
+    where
+        UntilFn: Fn(char, usize) -> CursorSeek,
+    {
+        self.seek_until(Direction::Backwards, until_fn)
+    }
+
+    /// When called, performs the given `seek` operation once, causing the cursor to seek backwards
+    /// by the given amount
+    pub fn seek_backwards(self: &Self, seek: CursorSeek) -> (Self, String) {
+        self.seek_backwards_until(|_character, index| {
             if index == 0 {
                 seek.clone()
             } else {
