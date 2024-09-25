@@ -8,6 +8,7 @@ pub enum CursorSeekAdvanceUntil {
 }
 
 // An enum used by seek_forwards_until to control how seeking should commence.
+#[derive(Debug, Clone)]
 pub enum CursorSeek {
     Continue, // Seek to the next character
     Stop, // Finish and don't include this character
@@ -29,9 +30,8 @@ impl Cursor {
         Self { node, offset }
     }
 
-    // TODO: seek_forwards_until (Continue, AdvanceByCharCount(...), AdvanceUntilNextChar(...), Stop, Done)
-    // Inclusive / exclusive?
-
+    /// When called, seeks forward starting at the cursor position character by character through
+    /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
     pub fn seek_forwards_until<UntilFn>(
         self: &mut Self,
         until_fn: UntilFn,
@@ -39,6 +39,9 @@ impl Cursor {
         let mut global_char_counter = 0;
         let mut new_offset = self.offset;
         let mut new_node = self.node.clone();
+
+        let mut cached_char_until_count: Option<usize> = None;
+        let mut cached_char_until_fn: Option<fn(char) -> CursorSeekAdvanceUntil> = None;
 
         let resulting_chars = InMemoryNode::seek_forwards_until(&self.node, |node, _ct| {
             new_node = node.clone();
@@ -49,6 +52,38 @@ impl Cursor {
             let node_literal = InMemoryNode::literal(node);
             let mut iterator = node_literal.chars();
             while let Some(character) = iterator.next() {
+                // If there's a char_until_count, then run until that exhausts iself
+                if let Some(char_until_count) = cached_char_until_count {
+                    if char_until_count > 1 {
+                        result.push(character);
+                        cached_char_until_count = Some(char_until_count-1);
+                        continue;
+                    } else {
+                        cached_char_until_count = None;
+                    }
+                }
+
+                // If there's a char_until_fn, then run until that passes
+                if let Some(char_until_fn) = cached_char_until_fn {
+                    match char_until_fn(character) {
+                        CursorSeekAdvanceUntil::Continue => {
+                            result.push(character);
+                            global_char_counter += 1;
+                            new_offset += 1;
+                            continue;
+                        },
+                        CursorSeekAdvanceUntil::Stop => {
+                            cached_char_until_fn = None;
+                        },
+                        CursorSeekAdvanceUntil::Done => {
+                            result.push(character);
+                            global_char_counter += 1;
+                            new_offset += 1;
+                            cached_char_until_fn = None;
+                        },
+                    }
+                }
+
                 global_char_counter += 1;
                 new_offset += 1;
 
@@ -58,30 +93,13 @@ impl Cursor {
                         continue;
                     },
                     CursorSeek::AdvanceByCharCount(n) => {
-                        // FIXME: this doesn't work when `n` crosses the border from one node to
-                        // another node! Track instead this value as a mut outside the closure
-                        for _ in 0..n {
-                            global_char_counter += 1;
-                            iterator.next();
-                        }
+                        result.push(character);
+                        cached_char_until_count = Some(n);
                         continue;
                     },
-                    CursorSeek::AdvanceUntil(until_fn) => {
-                        while let Some(character) = iterator.next() {
-                            match until_fn(character) {
-                                CursorSeekAdvanceUntil::Continue => {
-                                    global_char_counter += 1;
-                                    continue;
-                                },
-                                CursorSeekAdvanceUntil::Stop => {
-                                    break;
-                                },
-                                CursorSeekAdvanceUntil::Done => {
-                                    global_char_counter += 1;
-                                    break;
-                                },
-                            }
-                        }
+                    CursorSeek::AdvanceUntil(char_until_fn) => {
+                        result.push(character);
+                        cached_char_until_fn = Some(char_until_fn.clone());
                         continue;
                     },
                     CursorSeek::Stop => {
@@ -101,5 +119,17 @@ impl Cursor {
         self.offset = new_offset;
 
         resulting_chars.flat_map(|vector| vector.into_iter()).collect::<String>()
+    }
+
+    /// When called, performs the given `seek` operation once, causing the cursor to seek forwards
+    /// by the given amount
+    pub fn seek_forwards(self: &mut Self, seek: CursorSeek) -> String {
+        self.seek_forwards_until(|_character, index| {
+            if index == 0 {
+                seek.clone()
+            } else {
+                CursorSeek::Stop
+            }
+        })
     }
 }

@@ -5,7 +5,7 @@ mod cursor;
 
 use node::{InMemoryNode, NodeSeek};
 
-use crate::cursor::CursorSeek;
+use crate::cursor::{Cursor, CursorSeek, CursorSeekAdvanceUntil};
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
@@ -70,13 +70,19 @@ fn main() {
     // let string = results.fold("".into(), |acc, node| format!("{acc} {:?}", node.borrow().metadata));
     // println!("STRING: {:?}", string);
 
-    let mut cur = cursor::Cursor::new(parent);
-    let output = cur.seek_forwards_until(|_character, ct| {
-        if ct == 5 {
-            CursorSeek::Continue
-        } else {
-            CursorSeek::Stop
-        }
-    });
+    let mut cur = Cursor::new(parent);
+    // let output = cur.seek_forwards_until(|_character, ct| {
+    //     if ct < 5 {
+    //         CursorSeek::Continue
+    //     } else if ct == 5 {
+    //         CursorSeek::AdvanceByCharCount(1)
+    //     } else {
+    //         CursorSeek::Done
+    //     }
+    // });
+    // let output = cur.seek_forwards(CursorSeek::AdvanceByCharCount(5));
+    let output = cur.seek_forwards(CursorSeek::AdvanceUntil(|c| {
+        if c == 'w' { CursorSeekAdvanceUntil::Stop } else { CursorSeekAdvanceUntil::Continue }
+    }));
     println!("STRING: {:?}", output);
 }
