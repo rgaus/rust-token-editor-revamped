@@ -7,6 +7,8 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use super::utils::{Direction, Inclusivity};
+
 /// An enum used by seek_forwards_until to control how seeking should commence.
 pub enum NodeSeek<Item> {
     Continue(Item), // Seek to the next token
@@ -558,19 +560,43 @@ impl InMemoryNode {
         }
     }
 
+    pub fn seek_until<UntilFn, ResultItem>(
+        node: &Rc<RefCell<Self>>,
+        direction: Direction,
+        current_node_included: Inclusivity,
+        until_fn: UntilFn,
+    ) -> std::vec::IntoIter<ResultItem>
+    where
+        UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
+    {
+        match direction {
+            Direction::Forwards => Self::seek_forwards_until(node, current_node_included, until_fn),
+            Direction::Backwards => Self::seek_backwards_until(node, current_node_included, until_fn),
+        }
+    }
+
     /// Given a starting node `node`, seek forwards via next, calling `until_fn` repeatedly for
     /// each node to determine how to proceed.
+    ///
+    /// If `current_node_included` is Inclusivity::Inclusive, then `until_fn` is called with the
+    /// `node` at the start before continuing the seek. If it is Inclusivity::Exclusive, then the
+    /// node's next node is the first node fed into `until_fn`.
     ///
     /// Returns an iterator of the return value of each call to `until_fn` that have been properly matched.
     pub fn seek_forwards_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
+        current_node_included: Inclusivity,
         mut until_fn: UntilFn,
     ) -> std::vec::IntoIter<ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
-        let Some(mut cursor) = node.borrow().next.clone().map(|n| n.upgrade()).flatten() else {
-            // This node.next is None, so bail early
+        let cursor = match current_node_included {
+            Inclusivity::Inclusive => Some(node.clone()),
+            Inclusivity::Exclusive => node.borrow().next.clone().map(|n| n.upgrade()).flatten(),
+        };
+        let Some(mut cursor) = cursor else {
+            // The cursor node is None, so bail early!
             return (vec![]).into_iter();
         };
 
@@ -589,6 +615,62 @@ impl InMemoryNode {
                     };
 
                     cursor = cursor_next;
+                    iteration_counter += 1;
+                    continue;
+                }
+                NodeSeek::Stop => {
+                    break;
+                }
+                NodeSeek::Done(result) => {
+                    output.push(result);
+                    break;
+                }
+            }
+        }
+
+        output.into_iter()
+    }
+
+    /// Given a starting node `node`, seek backwards via previous, calling `until_fn` repeatedly for
+    /// each node to determine how to proceed.
+    ///
+    /// If `current_node_included` is Inclusivity::Inclusive, then `until_fn` is called with the
+    /// `node` at the start before continuing the seek. If it is Inclusivity::Exclusive, then the
+    /// node's previous node is the first node fed into `until_fn`.
+    ///
+    /// Returns an iterator of the return value of each call to `until_fn` that have been properly matched.
+    pub fn seek_backwards_until<UntilFn, ResultItem>(
+        node: &Rc<RefCell<Self>>,
+        current_node_included: Inclusivity,
+        mut until_fn: UntilFn,
+    ) -> std::vec::IntoIter<ResultItem>
+    where
+        UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
+    {
+        let cursor = match current_node_included {
+            Inclusivity::Inclusive => Some(node.clone()),
+            Inclusivity::Exclusive => node.borrow().previous.clone().map(|n| n.upgrade()).flatten(),
+        };
+        let Some(mut cursor) = cursor else {
+            // The cursor node is None, so bail early!
+            return (vec![]).into_iter();
+        };
+
+        let mut output = vec![];
+        let mut iteration_counter: usize = 0;
+        loop {
+            match until_fn(&cursor, iteration_counter) {
+                NodeSeek::Continue(result) => {
+                    // Continue looping to the previous node!
+                    output.push(result);
+
+                    let cursor_previous = cursor.borrow().previous.clone().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_previous) = cursor_previous else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_previous;
                     iteration_counter += 1;
                     continue;
                 }
