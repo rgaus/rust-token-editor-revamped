@@ -52,7 +52,6 @@ impl CursorSeek {
         };
 
         let mut hit_word_char = false;
-        let mut bail_on_next = false;
 
         // From :h word -
         // A word consists of a sequence of letters, digits and underscores, or a
@@ -62,19 +61,12 @@ impl CursorSeek {
         CursorSeek::advance_until(move |c, _i| {
             let final_seek = final_seek.clone();
 
-            if bail_on_next {
-                return final_seek;
-            };
-
             // set iskeyword? @,48-57,_,192-255
             if c > char_of_value_255 || (c >= '0' && c <= '9') || c == '_' || (c >= 'A' && c <= char_of_value_255)  {
-                hit_word_char = true;
-                println!("a");
                 // If a word character, keep going
+                hit_word_char = true;
                 CursorSeek::Continue
             } else if !hit_word_char && c == '\n' {
-                println!("b");
-                bail_on_next = true;
                 // If a newling, then advance until whitespace after that new line stops
                 CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
                     CursorSeek::Continue
@@ -82,8 +74,6 @@ impl CursorSeek {
                     CursorSeek::Stop
                 })
             } else if !hit_word_char && c.is_whitespace() {
-                println!("c");
-                bail_on_next = true;
                 // If whitespace, then advance until the whitespace finishes, then resume the word
                 // checking logic
                 CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
@@ -104,7 +94,6 @@ impl CursorSeek {
         };
 
         let mut hit_word_char = false;
-        let mut bail_on_next = false;
 
         // From :h WORD -
         // A WORD consists of a sequence of non-blank characters, separated with white
@@ -112,16 +101,11 @@ impl CursorSeek {
         CursorSeek::advance_until(move |c, _i| {
             let final_seek = final_seek.clone();
 
-            if bail_on_next {
-                return final_seek;
-            };
-
             if !c.is_whitespace() {
                 // If a word character, keep going
                 hit_word_char = true;
                 CursorSeek::Continue
             } else if !hit_word_char && c == '\n' {
-                bail_on_next = true;
                 CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
                     CursorSeek::Continue
                 } else {
@@ -130,7 +114,6 @@ impl CursorSeek {
             } else if !hit_word_char && c.is_whitespace() {
                 // If whitespace, then advance until the whitespace finishes, then resume the word
                 // checking logic
-                bail_on_next = true;
                 CursorSeek::advance_until(move |c, _i| if c.is_whitespace() {
                     CursorSeek::Continue
                 } else {
