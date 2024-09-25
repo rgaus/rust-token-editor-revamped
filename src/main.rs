@@ -1,10 +1,8 @@
 mod node_tree;
 
-use std::rc::Rc;
-
 use crate::node_tree::{
     cursor::{Cursor, CursorSeek},
-    node::{InMemoryNode, NodeSeek},
+    node::InMemoryNode,
     utils::Inclusivity,
 };
 
@@ -71,7 +69,7 @@ fn main() {
     // let string = results.fold("".into(), |acc, node| format!("{acc} {:?}", node.borrow().metadata));
     // println!("STRING: {:?}", string);
 
-    let mut cur = Cursor::new(parent);
+    let cur = Cursor::new(parent);
     // let output = cur.seek_forwards_until(|_character, ct| {
     //     if ct < 5 {
     //         CursorSeek::Continue
