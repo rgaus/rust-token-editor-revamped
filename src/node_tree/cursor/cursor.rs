@@ -2,7 +2,7 @@ use crate::node_tree::{
     cursor::CursorSeek,
     node::{InMemoryNode, NodeSeek},
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, fmt::Debug};
 
 /// A cursor represents a position in a node tree - ie, a node and an offset in characters from the
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
@@ -10,6 +10,15 @@ use std::{cell::RefCell, rc::Rc};
 pub struct Cursor {
     node: Rc<RefCell<InMemoryNode>>,
     offset: usize,
+}
+
+impl Debug for Cursor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Cursor")
+         .field(&self.node.borrow().metadata)
+         .field(&self.offset)
+         .finish()
+    }
 }
 
 impl Cursor {
