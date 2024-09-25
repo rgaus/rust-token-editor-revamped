@@ -7,6 +7,11 @@ pub enum CursorSeekAdvanceUntil {
     Done,
 }
 
+pub enum CursorInclusivity {
+    Inclusive,
+    Exclusive,
+}
+
 // An enum used by seek_forwards_until to control how seeking should commence.
 #[derive(Clone)]
 pub enum CursorSeek {
@@ -36,6 +41,25 @@ impl CursorSeek {
                 CursorSeekAdvanceUntil::Stop
             } else {
                 CursorSeekAdvanceUntil::Continue
+            }
+        })
+    }
+    pub fn advance_lower_word(inclusive: CursorInclusivity) -> Self {
+        let char_of_value_255 = char::from_u32(255).unwrap();
+
+        // letters / digits / underscores
+        //
+        CursorSeek::advance_until(move |c| {
+            // set iskeyword? @,48-57,_,192-255
+            if c > char_of_value_255 || (c >= '0' && c <= '9') || c == '_' || (c >= 'A' && c <= char_of_value_255)  {
+                CursorSeekAdvanceUntil::Continue
+            // } else if c === 10 {
+            //     CursorSeekAdvanceUntil::Continue
+            } else {
+                match inclusive {
+                    CursorInclusivity::Inclusive => CursorSeekAdvanceUntil::Done,
+                    CursorInclusivity::Exclusive => CursorSeekAdvanceUntil::Stop,
+                }
             }
         })
     }
