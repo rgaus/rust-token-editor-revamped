@@ -1,4 +1,4 @@
-use crate::node_tree::utils::Inclusivity;
+use crate::node_tree::utils::{Inclusivity, is_lower_word_char, is_upper_word_char};
 use std::{cell::RefCell, rc::Rc};
 
 // An enum used by seek_forwards_until to control how seeking should commence.
@@ -43,8 +43,6 @@ impl CursorSeek {
     }
 
     pub fn advance_lower_word(inclusive: Inclusivity) -> Self {
-        let char_of_value_255 = char::from_u32(255).unwrap();
-
         let final_seek = match inclusive {
             Inclusivity::Inclusive => CursorSeek::Done,
             Inclusivity::Exclusive => CursorSeek::Stop,
@@ -61,11 +59,7 @@ impl CursorSeek {
             let final_seek = final_seek.clone();
 
             // set iskeyword? @,48-57,_,192-255
-            if c > char_of_value_255
-                || (c >= '0' && c <= '9')
-                || c == '_'
-                || (c >= 'A' && c <= char_of_value_255)
-            {
+            if is_lower_word_char(c) {
                 // If a word character, keep going
                 hit_word_char = true;
                 CursorSeek::Continue
@@ -108,7 +102,7 @@ impl CursorSeek {
         CursorSeek::advance_until(move |c, _i| {
             let final_seek = final_seek.clone();
 
-            if !c.is_whitespace() {
+            if is_upper_word_char(c) {
                 // If a word character, keep going
                 hit_word_char = true;
                 CursorSeek::Continue
