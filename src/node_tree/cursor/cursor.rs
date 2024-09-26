@@ -148,13 +148,23 @@ impl Cursor {
                         }
                         CursorSeek::Done => {
                             result.push(character);
-                            global_char_counter += 1;
-                            new_offset = match direction {
-                                Direction::Forwards => new_offset + 1,
-                                Direction::Backwards => new_offset - 1,
-                            };
                             advance_until_fn_stack.pop();
                             advance_until_char_counter_stack.pop();
+
+                            let other_until_fns_are_in_the_stack = (
+                                !advance_until_fn_stack.is_empty() || !advance_until_char_counter_stack.is_empty()
+                            );
+
+                            // NOTE: these values will get incremented after this as part of
+                            // the main while loop if this was the final until_fn, so skip the
+                            // increments on the final stack item to avoid doing them twice.
+                            if other_until_fns_are_in_the_stack {
+                                global_char_counter += 1;
+                                new_offset = match direction {
+                                    Direction::Forwards => new_offset + 1,
+                                    Direction::Backwards => new_offset - 1,
+                                };
+                            }
                             println!("... DONE? {:?}", advance_until_char_counter_stack);
                         }
                     }
