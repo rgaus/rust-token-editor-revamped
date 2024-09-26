@@ -110,11 +110,12 @@ fn main() {
     // let cur = Cursor::new(parent);
     // let (cur, output) = cur.seek_forwards(CursorSeek::AdvanceByCharCount(10));
     // println!("FORWARDS: {:?} {:?}\n", cur, output);
+    // let (cur, output) = cur.seek_forwards(CursorSeek::advance_lower_word(inclusivity));
     let inclusivity = Inclusivity::Inclusive;
     let (cur, output) = cur.seek_forwards(CursorSeek::advance_lower_word(inclusivity));
     println!("FORWARDS: {:?} {:?}", cur, output);
-    let (cur, output) = cur.seek_backwards(CursorSeek::advance_lower_word(inclusivity));
+    // let (cur, output) = cur.seek_backwards(CursorSeek::advance_lower_word(inclusivity));
     // let (cur, output) = cur.seek_backwards(CursorSeek::AdvanceByCharCount(5));
-    println!("BACKWARDS: {:?} {:?}", cur, output);
+    // println!("BACKWARDS: {:?} {:?}", cur, output);
     // foobarbaz quuxhelloworld
 }

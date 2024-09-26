@@ -130,7 +130,91 @@ impl CursorSeek {
         })
     }
 
-    // Note that `e` is always inclusive, ie `cw`, `de`, and `e` all end up with the cursor in
+    // Note that `e` is always inclusive, ie `ce`, `de`, and `e` all end up with the cursor in
     // the same end spot
-    // TODO: pub fn advance_lower_end() -> Self {
+    pub fn advance_lower_end() -> Self {
+        let mut hit_word_char = false;
+
+        // From :h word -
+        // A word consists of a sequence of letters, digits and underscores, or a
+        // sequence of other non-blank characters, separated with white space (spaces,
+        // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
+        // is also considered to be a word.
+        CursorSeek::advance_until(move |c, _i| {
+            if is_lower_word_char(c) {
+                // If a word character, keep going
+                hit_word_char = true;
+                CursorSeek::Continue
+            } else if !hit_word_char && !is_lower_word_char(c) {
+                // If not word character and a word character hasn't been encountered yet, keep
+                // going until a word character is hit.
+                CursorSeek::Continue
+            } else if !hit_word_char && c == '\n' {
+                // If a newline, then advance until whitespace after that new line stops, and then
+                // start looking for word chars
+                CursorSeek::advance_until(move |c, _i| {
+                    if c.is_whitespace() {
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Stop
+                    }
+                })
+            } else if !hit_word_char && c.is_whitespace() {
+                // If whitespace, then advance until the whitespace finishes, then resume the word
+                // checking logic
+                CursorSeek::advance_until(move |c, _i| {
+                    if c.is_whitespace() {
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Stop
+                    }
+                })
+            } else {
+                CursorSeek::Stop
+            }
+        })
+    }
+
+    // Note that `e` is always inclusive, ie `ce`, `de`, and `e` all end up with the cursor in
+    // the same end spot
+    pub fn advance_upper_end() -> Self {
+        let mut hit_word_char = false;
+
+        // From :h WORD -
+        // A WORD consists of a sequence of non-blank characters, separated with white
+        // space.  An empty line is also considered to be a WORD.
+        CursorSeek::advance_until(move |c, _i| {
+            if is_upper_word_char(c) {
+                // If a word character, keep going
+                hit_word_char = true;
+                CursorSeek::Continue
+            } else if !hit_word_char && !is_upper_word_char(c) {
+                // If not word character and a word character hasn't been encountered yet, keep
+                // going until a word character is hit.
+                CursorSeek::Continue
+            } else if !hit_word_char && c == '\n' {
+                // If a newline, then advance until whitespace after that new line stops, and then
+                // start looking for word chars
+                CursorSeek::advance_until(move |c, _i| {
+                    if c.is_whitespace() {
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Stop
+                    }
+                })
+            } else if !hit_word_char && c.is_whitespace() {
+                // If whitespace, then advance until the whitespace finishes, then resume the word
+                // checking logic
+                CursorSeek::advance_until(move |c, _i| {
+                    if c.is_whitespace() {
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Stop
+                    }
+                })
+            } else {
+                CursorSeek::Stop
+            }
+        })
+    }
 }
