@@ -82,24 +82,25 @@ impl Cursor {
                     Direction::Backwards => node_literal.len(),
                 };
             };
-            println!("ITERATOR: '{}' {:?}", node_literal, iterator);
+            println!("ITERATOR: '{}' {:?} {}", node_literal, iterator, new_offset);
 
             // Iterate over all characters within the node, one by one, until a match occurs:
             while let Some(character) = match direction {
                 Direction::Forwards => iterator.next(),
                 Direction::Backwards => iterator.next_back(),
             } {
-                println!("CHAR: {}", character);
+                println!("CHAR: {} {}", character, new_offset);
                 // If there's a char_until_count, then run until that exhausts iself
                 if cached_char_until_count > 0 {
-                    result.push(character);
-                    global_char_counter += 1;
-                    new_offset = match direction {
-                        Direction::Forwards => new_offset + 1,
-                        Direction::Backwards => new_offset - 1,
-                    };
                     cached_char_until_count -= 1;
+
                     if cached_char_until_count > 0 {
+                        result.push(character);
+                        global_char_counter += 1;
+                        new_offset = match direction {
+                            Direction::Forwards => new_offset + 1,
+                            Direction::Backwards => new_offset - 1,
+                        };
                         continue;
                     }
                 }
