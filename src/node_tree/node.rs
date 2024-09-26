@@ -61,6 +61,24 @@ impl InMemoryNode {
         }))
     }
 
+    /// Given a literal string, returns a token tree which represents the literal using a series of
+    /// nodes all under a common parent. Each node contains an `chars_per_node` characters except
+    /// for the final one, which may contain less if literal.len() % chars_per_node != 0
+    pub fn new_tree_from_literal_in_chunks(literal: &str, chars_per_node: usize) -> Rc<RefCell<Self>> {
+        let parent = Self::new_empty();
+        let literal: String = literal.into();
+
+        let literal_char_vector = literal.chars().collect::<Vec<char>>();
+        let literal_chunks = literal_char_vector.chunks(chars_per_node).map(|char_slice| char_slice.iter().collect::<String>());
+
+        for literal in literal_chunks {
+            let chunk_node = Self::new_from_literal(&literal);
+            Self::append_child(&parent, chunk_node);
+        }
+
+        parent
+    }
+
     pub fn dump(node: &Rc<RefCell<Self>>) {
         Self::dump_child(node, "", None);
     }
