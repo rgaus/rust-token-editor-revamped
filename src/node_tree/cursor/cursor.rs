@@ -82,14 +82,12 @@ impl Cursor {
                     Direction::Backwards => node_literal.len(),
                 };
             };
-            println!("ITERATOR: '{}' {:?} {}", node_literal, iterator, new_offset);
 
             // Iterate over all characters within the node, one by one, until a match occurs:
             while let Some(character) = match direction {
                 Direction::Forwards => iterator.next(),
                 Direction::Backwards => iterator.next_back(),
             } {
-                println!("CHAR: {} {}", character, new_offset);
                 // If there's a char_until_count, then run until that exhausts iself
                 if cached_char_until_count > 0 {
                     cached_char_until_count -= 1;
@@ -124,7 +122,6 @@ impl Cursor {
                                 Direction::Backwards => new_offset - 1,
                             };
                             *advance_until_char_counter_stack.last_mut().unwrap() += 1;
-                            println!("... CONTINUE? {:?}", advance_until_char_counter_stack);
                             continue;
                         }
                         CursorSeek::AdvanceByCharCount(n) => {
@@ -138,13 +135,11 @@ impl Cursor {
                             result.push(character);
                             advance_until_fn_stack.push(char_until_fn);
                             advance_until_char_counter_stack.push(0);
-                            println!("... PUSH! {:?}", advance_until_char_counter_stack);
                             continue;
                         }
                         CursorSeek::Stop => {
                             advance_until_fn_stack.pop();
                             advance_until_char_counter_stack.pop();
-                            println!("... STOP? {:?}", advance_until_char_counter_stack);
                         }
                         CursorSeek::Done => {
                             result.push(character);
@@ -165,7 +160,6 @@ impl Cursor {
                                     Direction::Backwards => new_offset - 1,
                                 };
                             }
-                            println!("... DONE? {:?}", advance_until_char_counter_stack);
                         }
                     }
                     if !advance_until_fn_stack.is_empty()
@@ -175,7 +169,6 @@ impl Cursor {
                     }
                 }
 
-                println!("OFFSET: {:?}", new_offset);
                 global_char_counter += 1;
                 new_offset = match direction {
                     Direction::Forwards => new_offset + 1,
@@ -198,7 +191,6 @@ impl Cursor {
                         result.push(character);
                         advance_until_fn_stack.push(char_until_fn);
                         advance_until_char_counter_stack.push(0);
-                        println!("PUSH!");
                         continue;
                     }
                     CursorSeek::Stop => {
