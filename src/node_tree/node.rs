@@ -748,4 +748,42 @@ impl InMemoryNode {
 
         output.into_iter()
     }
+
+    /// Given a starting node `start_node`, delete from that node the the next node and onwards,
+    /// as long as the `until_fn` predicate function passes. if `start_node_included` is
+    /// Inclusivity::Exclusive, begin iterating AFTER the start_node rather than right at it.
+    pub fn remove_nodes_sequentially_until<UntilFn, ResultItem>(
+        start_node: &Rc<RefCell<Self>>,
+        start_node_included: Inclusivity,
+        until_fn: UntilFn,
+    ) -> std::vec::IntoIter<ResultItem>
+    where
+        UntilFn: Fn(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>
+    {
+        let node_value_pairs = Self::seek_forwards_until(start_node, start_node_included, |node, index| {
+            match until_fn(node, index) {
+                NodeSeek::Continue(value) => NodeSeek::Continue((node.clone(), value)),
+                NodeSeek::Done(value) => NodeSeek::Done((node.clone(), value)),
+                NodeSeek::Stop => NodeSeek::Stop,
+            }
+        });
+
+        let (nodes, values): (Vec<_>, Vec<_>) = node_value_pairs.unzip();
+
+        // TODO: optimize this to do these deletes in bulk once it becomes a problem, a lot of
+        // duplicate pointer assignment in InMemoryNode::remove_child_at_index could probably
+        // be saved
+        for node in nodes {
+            let Some(Some(parent)) = node.borrow().parent.clone().map(|n| n.upgrade()) else {
+                continue;
+            };
+            let Some(child_index) = node.borrow().child_index else {
+                continue;
+            };
+            InMemoryNode::remove_child_at_index(&parent, child_index);
+            InMemoryNode::dump(&parent);
+        }
+
+        values.into_iter()
+    }
 }
