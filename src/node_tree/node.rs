@@ -40,6 +40,7 @@ pub struct InMemoryNode {
     // Tree data structure refs:
     pub parent: Option<Weak<RefCell<InMemoryNode>>>,
     pub children: Vec<Rc<RefCell<InMemoryNode>>>,
+    pub child_index: Option<usize>,
     pub first_child: Option<Weak<RefCell<InMemoryNode>>>,
     pub last_child: Option<Weak<RefCell<InMemoryNode>>>,
 
@@ -61,6 +62,7 @@ impl InMemoryNode {
             metadata,
             parent: None,
             children: vec![],
+            child_index: None,
             first_child: None,
             last_child: None,
             next: None,
@@ -221,11 +223,12 @@ impl InMemoryNode {
 
         println!(
             "{spacer}{}. metadata={:?} next={:?} prev={:?}\t\t{}",
-            if let Some(index) = parent_expected_index_within_children {
-                format!("{index}")
-            } else {
-                "0".into()
-            },
+            node.child_index.or(Some(0)).unwrap(),
+            // if let Some(index) = parent_expected_index_within_children {
+            //     format!("{index}")
+            // } else {
+            //     "0".into()
+            // },
             node.metadata,
             node.next
                 .clone()
@@ -368,9 +371,12 @@ impl InMemoryNode {
             //     None
             // };
 
+            // Step N: set this child's index in its parent's children array 
+            (*child_mut).child_index = Some(parent.borrow().children.len());
+
             // Step N: After linking child.previous and child.next, assign this child its new
             // fractional index
-            Self::assign_index(child_mut)
+            Self::assign_index(child_mut);
         }
 
         {
@@ -489,6 +495,16 @@ impl InMemoryNode {
 
             // Remove the node from `children`, which should cause the child's memory to get freed
             (*parent_mut).children.remove(index);
+
+            // Update all `child_index` values on the children afterwards to take into account its
+            // new index in `children`.
+            for child_index in index..(parent_mut.children.len()) {
+                let mut child_mut = parent_mut.children[child_index].borrow_mut();
+                child_mut.child_index = match child_mut.child_index {
+                    Some(child_index) => Some(child_index - 1),
+                    None => None,
+                };
+            }
         }
     }
 
