@@ -466,7 +466,7 @@ impl InMemoryNode {
             (*previous_child.borrow_mut()).next = Self::deep_last_child(child.clone())
                 .or(Some(child.clone()))
                 .map(|n| n.borrow().next.clone())
-                .flatten();
+                .flatten()
         };
 
         // Step 2: child_mut.deep_last_child.next.previous = child_mut.previous
@@ -487,10 +487,14 @@ impl InMemoryNode {
                     parent_mut.children.get(1).map(|child| Rc::downgrade(child));
             }
             if index == max_child_index {
-                (*parent_mut).last_child = parent_mut
-                    .children
-                    .get(max_child_index - 1)
-                    .map(|child| Rc::downgrade(child));
+                (*parent_mut).last_child = if max_child_index > 0 {
+                    parent_mut
+                        .children
+                        .get(max_child_index - 1)
+                        .map(|child| Rc::downgrade(child))
+                } else {
+                    None
+                };
             }
 
             // Remove the node from `children`, which should cause the child's memory to get freed
