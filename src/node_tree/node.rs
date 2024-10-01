@@ -1,13 +1,18 @@
-use crate::node_tree::node_debug_validators::{
-    validate_node_next, validate_node_previous, NodeNextValidReason, NodePreviousValidReason,
+use crate::node_tree::{
+    node_debug_validators::{
+        validate_node_next,
+        validate_node_previous,
+        NodeNextValidReason,
+        NodePreviousValidReason,
+    },
+    utils::{Direction, Inclusivity},
+    fractional_index::FractionalIndex,
 };
 use colored::Colorize;
 use std::{
-    cell::RefCell,
+    cell::{RefCell, RefMut},
     rc::{Rc, Weak},
 };
-
-use super::utils::{Direction, Inclusivity};
 
 /// An enum used by seek_forwards_until to control how seeking should commence.
 pub enum NodeSeek<Item> {
@@ -29,6 +34,7 @@ pub enum NodeMetadata {
 /// outputs) and hierarchically (ie, for performing language server like tasks)
 #[derive(Debug, Clone)]
 pub struct InMemoryNode {
+    pub index: FractionalIndex,
     pub metadata: NodeMetadata,
 
     // Tree data structure refs:
@@ -51,6 +57,7 @@ impl InMemoryNode {
     }
     pub fn new_with_metadata(metadata: NodeMetadata) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
+            index: FractionalIndex::start(),
             metadata,
             parent: None,
             children: vec![],
@@ -256,6 +263,19 @@ impl InMemoryNode {
         (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
     }
 
+    /// This is called after a node is inserted into the tree to assign it a correct fractional
+    /// index.
+    // fn recompute_index(node: &Rc<RefCell<Self>>) {
+    fn assign_index(mut node_mut: RefMut<'_, Self>) {
+        let new_index = {
+            FractionalIndex::generate_or_fallback(
+                node_mut.previous.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index),
+                node_mut.next.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index),
+            )
+        };
+        (*node_mut).index = new_index;
+    }
+
     /// Given a node, gets its "deep last child" - ie, the last child of the last child
     /// of the ... etc
     ///
@@ -347,6 +367,10 @@ impl InMemoryNode {
             // } else {
             //     None
             // };
+
+            // Step N: After linking child.previous and child.next, assign this child its new
+            // fractional index
+            Self::assign_index(child_mut)
         }
 
         {
