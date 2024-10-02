@@ -262,6 +262,9 @@ impl InMemoryNode {
             "".into()
         }
     }
+    pub fn literal_substring(node: &Rc<RefCell<Self>>, start: usize, length: usize) -> String {
+        Self::literal(node).chars().skip(start).take(length).collect::<String>()
+    }
     pub fn set_literal(node: &Rc<RefCell<Self>>, new_literal: &str) {
         (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
     }
@@ -800,9 +803,27 @@ impl InMemoryNode {
                 continue;
             };
             InMemoryNode::remove_child_at_index(&parent, child_index);
-            InMemoryNode::dump(&parent);
         }
 
         values.into_iter()
     }
 }
+
+impl PartialEq for InMemoryNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
+    }
+}
+
+impl PartialOrd for InMemoryNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.index < other.index {
+            Some(std::cmp::Ordering::Less)
+        } else if self.index > other.index {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            Some(std::cmp::Ordering::Equal)
+        }
+    }
+}
+

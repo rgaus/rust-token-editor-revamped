@@ -8,6 +8,7 @@ use std::{cell::RefCell, rc::Rc, fmt::Debug};
 /// A cursor represents a position in a node tree - ie, a node and an offset in characters from the
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
 /// its contents or to perform operations on the node tree.
+#[derive(Clone)]
 pub struct Cursor {
     node: Rc<RefCell<InMemoryNode>>,
     offset: usize,
@@ -28,6 +29,14 @@ impl Cursor {
     }
     pub fn new_at(node: Rc<RefCell<InMemoryNode>>, offset: usize) -> Self {
         Self { node, offset }
+    }
+
+    /// When called, create a new Selection out of this cursor.
+    ///
+    /// A Selection is a "double ended" cursor that can be used to define text ranges to perform
+    /// operations on.
+    pub fn selection(self: &Self) -> Selection {
+        Selection::new_from_cursor(self.clone())
     }
 
     /// When called, seeks starting at the cursor position character by character through the node
@@ -258,4 +267,91 @@ impl Cursor {
             }
         })
     }
+}
+
+
+
+
+
+#[derive(Clone)]
+pub struct Selection {
+    pub primary: Cursor,
+    pub secondary: Cursor,
+}
+
+impl Debug for Selection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Selection({:?}, primary={:?} secondary={:?})", self.literal(), self.primary, self.secondary)
+    }
+}
+
+impl Selection {
+    pub fn new(node: Rc<RefCell<InMemoryNode>>) -> Self {
+        Self::new_at(node, 0)
+    }
+    pub fn new_at(node: Rc<RefCell<InMemoryNode>>, offset: usize) -> Self {
+        let cursor = Cursor::new_at(node, offset);
+        Self::new_from_cursor(cursor)
+    }
+    pub fn new_from_cursor(cursor: Cursor) -> Self {
+        Self { secondary: cursor.clone(), primary: cursor }
+    }
+
+    pub fn set_primary(self: &mut Self, input: (Cursor, String)) {
+        self.secondary = input.0;
+    }
+    pub fn set_secondary(self: &mut Self, input: (Cursor, String)) {
+        self.secondary = input.0;
+    }
+
+    /// When called, computes the underlying literal text that the selection has covered.
+    pub fn literal(self: &Self) -> String {
+        // If the node selection spans within a single node, then take a substring of the common
+        // literal value based on the offsets.
+        if self.primary.node == self.secondary.node {
+            let literal_start_offset = if self.primary.offset < self.secondary.offset {
+                self.primary.offset
+            } else {
+                self.secondary.offset
+            };
+            let literal_length = self.secondary.offset.abs_diff(self.primary.offset);
+            return InMemoryNode::literal_substring(
+                &self.primary.node,
+                literal_start_offset,
+                literal_length,
+            );
+        };
+
+        // If the node selection spans multiple nodes, then:
+        //
+        // 1. Find the earlier node, and store the part which is within the selection
+        let earlier_cursor = if self.primary.node < self.secondary.node { &self.primary } else { &self.secondary };
+        let later_cursor = if self.primary.node < self.secondary.node { &self.secondary } else { &self.primary };
+        let earlier_suffix = InMemoryNode::literal_substring(
+            &earlier_cursor.node,
+            earlier_cursor.offset,
+            InMemoryNode::literal(&earlier_cursor.node).len() - earlier_cursor.offset,
+        );
+
+        // 2. Store the first part of the later node which should be kept
+        let later_prefix = InMemoryNode::literal_substring(
+            &later_cursor.node,
+            0,
+            later_cursor.offset,
+        );
+
+        // 3. Accumulate the text in the in between nodes
+        let in_between_node_literals = InMemoryNode::seek_forwards_until(&earlier_cursor.node, Inclusivity::Exclusive, |node, ct| {
+            if node == &later_cursor.node {
+                NodeSeek::Stop
+            } else {
+                let literal = InMemoryNode::literal(node);
+                NodeSeek::Continue(literal)
+            }
+        });
+
+        // 4. Combine it all together!
+        format!("{earlier_suffix}{}{later_prefix}", in_between_node_literals.collect::<String>())
+    }
+
 }
