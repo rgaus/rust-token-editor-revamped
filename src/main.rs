@@ -128,6 +128,7 @@ fn main() {
         selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10))
     );
     println!("SELECTION: {:?}", selection);
+    selection.delete().expect("Error calling selection.delete(): ");
     InMemoryNode::dump(&parent);
 
     // InMemoryNode::remove_nodes_sequentially_until(&parent, Inclusivity::Exclusive, |node, ct| {

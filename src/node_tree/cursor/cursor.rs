@@ -354,4 +354,94 @@ impl Selection {
         format!("{earlier_suffix}{}{later_prefix}", in_between_node_literals.collect::<String>())
     }
 
+    /// When called, deletes the character span referred to by the selection.
+    pub fn delete(self: &Self) -> Result<(), String> {
+        // If the node selection spans within a single node, then to delete that data, just update
+        // the string literal value on the node
+        if self.primary.node == self.secondary.node {
+            let new_literal_start_offset = if self.primary.offset < self.secondary.offset {
+                self.primary.offset
+            } else {
+                self.secondary.offset
+            };
+
+            // Construct a string, taking all the characters before the selection and the
+            // characters after the selection, and sticking them together (omitting the selection
+            // chars)
+            let new_literal_length = self.secondary.offset.abs_diff(self.primary.offset);
+            let new_literal_prefix = InMemoryNode::literal_substring(
+                &self.primary.node,
+                0,
+                new_literal_start_offset,
+            );
+            let new_literal_suffix = InMemoryNode::literal_substring(
+                &self.primary.node,
+                new_literal_start_offset + new_literal_length,
+                InMemoryNode::literal(&self.primary.node).len() - new_literal_start_offset,
+            );
+            let new_literal = format!("{new_literal_prefix}{new_literal_suffix}");
+
+            // NOTE: should all nodes under the parent be combined and reparsed if
+            // new_literal.len() == 0?
+            InMemoryNode::set_literal(&self.primary.node, &new_literal);
+
+            return Ok(());
+        };
+
+        // If the node selection spans multiple nodes, then:
+        //
+        // 1. Find the earlier node, and store the first part which should be kept
+        let earlier_cursor = if self.primary.node < self.secondary.node { &self.primary } else { &self.secondary };
+        let later_cursor = if self.primary.node < self.secondary.node { &self.secondary } else { &self.primary };
+        let literal_prefix_to_keep = InMemoryNode::literal_substring(&earlier_cursor.node, 0, earlier_cursor.offset);
+
+        // 2. Store the last part of the later node which should be kept
+        let literal_suffix_to_keep = InMemoryNode::literal_substring(
+            &later_cursor.node,
+            later_cursor.offset,
+            InMemoryNode::literal(&later_cursor.node).len() - later_cursor.offset,
+        );
+
+        // 3. Delete all nodes starting at after the earlier node up to and including the later node
+        InMemoryNode::remove_nodes_sequentially_until(&earlier_cursor.node, Inclusivity::Exclusive, |node, _ct| {
+            if node == &later_cursor.node {
+                NodeSeek::Done(())
+            } else {
+                NodeSeek::Continue(())
+            }
+        });
+
+        // 4. Keep going, storing literal text until back up at the same depth level as the
+        //    earlier node. Swap the earlier node with a new node containing literal text of all
+        //    the accumulated text.
+        let earlier_node_depth = InMemoryNode::depth(&earlier_cursor.node);
+        let resulting_literal_vectors = InMemoryNode::remove_nodes_sequentially_until(&later_cursor.node, Inclusivity::Exclusive, |node, _ct| {
+            let literal = InMemoryNode::literal(node);
+
+            let depth = InMemoryNode::depth(node);
+            if depth > earlier_node_depth {
+                // The node that was found was below `earlier_cursor.node` in the hierarchy, so
+                // keep going
+                NodeSeek::Continue(literal)
+            } else {
+                // The node was at or above `earlier_cursor.node`, so bail out
+                NodeSeek::Stop
+            }
+        });
+
+        let resulting_literal = format!(
+            "{literal_prefix_to_keep}{}{literal_suffix_to_keep}",
+            resulting_literal_vectors.collect::<String>(),
+        );
+
+        // Swap the earlier node with a new node containing literal text of all
+        // the accumulated text.
+        InMemoryNode::set_literal(&earlier_cursor.node, &resulting_literal);
+        InMemoryNode::remove_all_children(&earlier_cursor.node);
+
+        // 5. Reparse the newly created literal text node
+        // TODO
+
+        Ok(())
+    }
 }

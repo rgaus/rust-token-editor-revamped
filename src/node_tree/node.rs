@@ -534,6 +534,14 @@ impl InMemoryNode {
         }
     }
 
+    /// When called, removes all children from a node in the node tree, relinking nodes properly so
+    /// it is as if the children were never there.
+    pub fn remove_all_children(parent: &Rc<RefCell<Self>>) {
+        for (index, _child) in parent.borrow().children.iter().enumerate() {
+            Self::remove_child_at_index(parent, index);
+        };
+    }
+
     /// When called, swaps the child within `parent` at `index` with the `new_child`.
     /// If `new_child` itself has children, this subtree is spliced in to replace the old child.
     pub fn swap_child_at_index(
