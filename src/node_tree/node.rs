@@ -302,6 +302,25 @@ impl InMemoryNode {
         Some(cursor)
     }
 
+    /// Given a node, get its depth in the tree - ie, how many nodes would beed to be traversed down
+    /// starting at the top-level parent to get to this node?
+    pub fn depth(node: &Rc<RefCell<Self>>) -> usize {
+        let mut depth = 0;
+        let mut cursor = node.clone();
+        loop {
+            let Some(parent) = cursor.borrow().parent.clone() else {
+                break;
+            };
+            let Some(upgraded) = parent.upgrade() else {
+                break;
+            };
+            depth += 1;
+            cursor = upgraded.clone();
+        }
+
+        depth
+    }
+
     // TODO: prepend_child
 
     pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
