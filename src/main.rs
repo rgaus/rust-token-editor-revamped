@@ -109,6 +109,14 @@ fn main() {
     let parent = InMemoryNode::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
     InMemoryNode::dump(&parent);
 
+    println!("------");
+    InMemoryNode::insert_child(&parent, InMemoryNode::new_from_literal("NEW!"), 4);
+    InMemoryNode::dump(&parent);
+    println!("------");
+    InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("BLEW!"), 0);
+    InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("YOO"), 0);
+    InMemoryNode::dump(&parent);
+
     // let cur = Cursor::new_at(parent, 0);
     // // let cur = Cursor::new(parent);
     // // let (cur, output) = cur.seek_forwards(CursorSeek::AdvanceByCharCount(10));
@@ -121,15 +129,15 @@ fn main() {
     // // let (cur, output) = cur.seek_backwards(CursorSeek::AdvanceByCharCount(5));
     // // println!("BACKWARDS: {:?} {:?}", cur, output);
 
-    // let mut selection = Selection::new_at(parent.clone(), 0);
-    let mut selection = Selection::new_at(parent.borrow().children[2].clone(), 0);
-    selection.set_secondary(
-        // selection.secondary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive))
-        selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10))
-    );
-    println!("SELECTION: {:?}", selection);
-    selection.delete().expect("Error calling selection.delete(): ");
-    InMemoryNode::dump(&parent);
+    // // let mut selection = Selection::new_at(parent.clone(), 0);
+    // let mut selection = Selection::new_at(parent.borrow().children[2].clone(), 0);
+    // selection.set_secondary(
+    //     // selection.secondary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive))
+    //     selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10))
+    // );
+    // println!("SELECTION: {:?}", selection);
+    // selection.delete().expect("Error calling selection.delete(): ");
+    // InMemoryNode::dump(&parent);
 
     // InMemoryNode::remove_nodes_sequentially_until(&parent, Inclusivity::Exclusive, |node, ct| {
     //     if ct > 3 {

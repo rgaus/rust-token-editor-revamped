@@ -324,7 +324,86 @@ impl InMemoryNode {
         depth
     }
 
-    // TODO: prepend_child
+    /// When called, adds the given `child` to the `parent` at the beginning of its children Vec.
+    ///
+    /// This is identical to InMemoryNode::insert_child(parent, child, 0).
+    pub fn prepend_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
+        Self::insert_child(parent, child, 0)
+    }
+
+    pub fn insert_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>, index: usize) {
+        println!(
+            "CHILD: {:?} PARENT: {:?} INDEX: {}",
+            child.borrow().metadata,
+            parent.borrow().metadata,
+            index,
+        );
+
+        // NOTE: appending a child is the most common case which has an optimized write path that
+        // handles edge cases properly. So if this insert is inserting at the end of the child
+        // list, then fall back to this
+        let number_of_children = parent.borrow().children.len();
+        if number_of_children == 0 || index == number_of_children {
+            return Self::append_child(parent, child);
+        };
+
+        {
+            // FIXME: handle the case where `insert_child` is called with an index that is too
+            // large
+            let old_child_at_index = &parent.borrow().clone().children[index];
+
+            {
+                let mut child_mut = child.borrow_mut();
+
+                // Step 1: Add child.parent to be parent
+                (*child_mut).parent = Some(Rc::downgrade(&parent));
+
+                // Step 2: Update child.next to be old_child_at_index
+                (*child_mut).next = Some(Rc::downgrade(&old_child_at_index));
+
+                // Step N: make the new child's previous old_child_at_index.previous
+                (*child_mut).previous = old_child_at_index.borrow().previous.clone();
+
+                // Step N: set this child's index to where it is going
+                (*child_mut).child_index = Some(index);
+
+                // Step N: After linking child.previous and child.next, assign this child its new
+                // fractional index
+                Self::assign_index(child_mut);
+            }
+
+            // Step N: Relink old_child_at_index.OLD previous.next = child
+            if let Some(Some(previous)) = old_child_at_index.borrow().previous.clone().map(|n| n.upgrade()) {
+                (*previous.borrow_mut()).next = Some(Rc::downgrade(&child));
+            }
+
+            // Step N: Relink old_child_at_index.previous = child
+            (*old_child_at_index.borrow_mut()).previous = Some(Rc::downgrade(&child));
+        }
+
+        {
+            let mut parent_mut = parent.borrow_mut();
+
+            // Step 3: Update parent.first_child to be child IF inserting at index 0
+            if index == 0 {
+                (*parent_mut).first_child = Some(Rc::downgrade(&child));
+                (*parent_mut).next = Some(Rc::downgrade(&child));
+            }
+
+            // Step 6: Add child into `parent.children`
+            (*parent_mut).children.insert(index, child.clone());
+
+            // Update all `child_index` values on the children afterwards to take into account its
+            // new index in `children`.
+            for child_index in index+1..(parent_mut.children.len()) {
+                let mut child_mut = parent_mut.children[child_index].borrow_mut();
+                child_mut.child_index = match child_mut.child_index {
+                    Some(child_index) => Some(child_index + 1),
+                    None => None,
+                };
+            }
+        }
+    }
 
     pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
         println!(
