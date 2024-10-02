@@ -464,13 +464,13 @@ impl InMemoryNode {
         // println!("PREV: {:?}", previous_child.clone().map(|p| p.borrow().metadata.clone()));
         if let Some(previous_child) = previous_child {
             (*previous_child.borrow_mut()).next = Self::deep_last_child(child.clone())
-                .or(Some(child.clone()))
+                .or_else(|| Some(child.clone()))
                 .map(|n| n.borrow().next.clone())
                 .flatten()
         };
 
         // Step 2: child_mut.deep_last_child.next.previous = child_mut.previous
-        if let Some(deep_last_child) = deep_last_child {
+        if let Some(deep_last_child) = deep_last_child.or_else(|| Some(child.clone())) {
             let deep_last_child_next = deep_last_child.borrow().next.clone();
             if let Some(Some(deep_last_child_next)) = deep_last_child_next.map(|n| n.upgrade()) {
                 (*deep_last_child_next.borrow_mut()).previous = child.borrow().previous.clone();
