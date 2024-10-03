@@ -3,7 +3,7 @@ use crate::node_tree::{
     node::{InMemoryNode, NodeSeek},
     utils::{Direction, Inclusivity},
 };
-use std::{cell::RefCell, rc::Rc, fmt::Debug};
+use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
 
 /// A cursor represents a position in a node tree - ie, a node and an offset in characters from the
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
@@ -65,23 +65,22 @@ impl Cursor {
             let mut result = vec![];
 
             let node_literal = InMemoryNode::literal(node);
-            let mut iterator = node_literal.chars();
-            if ct == 0 {
+            let mut characters = if ct == 0 {
                 // If this is the first node, skip forward / backward `self.offset` times.
                 match direction {
                     Direction::Forwards => {
                         // Seek from the start to the offset
-                        for _ in 0..self.offset {
-                            iterator.next();
-                        };
+                        node_literal.chars().skip(self.offset).collect::<VecDeque<char>>()
                     },
                     Direction::Backwards => {
                         // Seek from the end to the offset from the start
+                        let mut iterator = node_literal.chars();
                         for _ in 0..(node_literal.len()-self.offset) {
                             iterator.next_back();
                         };
+                        iterator.collect::<VecDeque<char>>()
                     },
-                };
+                }
             } else {
                 // If this is not the first node, then make sure to reset the offset to either the
                 // start or end of the node so that increments / decrements later are operating on
@@ -90,13 +89,16 @@ impl Cursor {
                     Direction::Forwards => 0,
                     Direction::Backwards => node_literal.len(),
                 };
+
+                node_literal.chars().collect::<VecDeque<char>>()
             };
 
             // Iterate over all characters within the node, one by one, until a match occurs:
             while let Some(character) = match direction {
-                Direction::Forwards => iterator.next(),
-                Direction::Backwards => iterator.next_back(),
+                Direction::Forwards => characters.pop_front(),
+                Direction::Backwards => characters.pop_back(),
             } {
+                println!("INITIAL NEW_OFFSET: {new_offset} ({global_char_counter}, {character})");
                 // If there's a char_until_count, then run until that exhausts iself
                 if cached_char_until_count > 0 {
                     cached_char_until_count -= 1;
@@ -134,32 +136,28 @@ impl Cursor {
                             continue;
                         }
                         CursorSeek::AdvanceByCharCount(n) => {
-                            result.push(character);
-                            global_char_counter += 1;
-                            new_offset = match direction {
-                                Direction::Forwards => new_offset + 1,
-                                Direction::Backwards => new_offset - 1,
-                            };
+                            cached_char_until_count += n+1;
 
-                            // NOTE: n-1 to take into account the implicit "Continue" on the first
-                            // character
-                            cached_char_until_count += n-1;
+                            // NOTE: re-add the character back to the characters vec, so that it
+                            // can be skipped with the AdvanceByCharCount skip code
+                            match direction {
+                                Direction::Forwards => characters.push_front(character),
+                                Direction::Backwards => characters.push_back(character),
+                            };
                             continue;
                         }
                         CursorSeek::AdvanceUntil {
                             until_fn: char_until_fn,
                         } => {
-                            result.push(character);
-                            global_char_counter += 1;
-                            new_offset = match direction {
-                                Direction::Forwards => new_offset + 1,
-                                Direction::Backwards => new_offset - 1,
-                            };
-
                             advance_until_fn_stack.push(char_until_fn);
-                            // NOTE: 1 to take into account the implicit "Continue" on the first
-                            // character
-                            advance_until_char_counter_stack.push(1);
+                            advance_until_char_counter_stack.push(0);
+
+                            // NOTE: re-add the character back to the characters vec, so that it
+                            // can be skipped with the AdvanceByCharCount skip code
+                            match direction {
+                                Direction::Forwards => characters.push_front(character),
+                                Direction::Backwards => characters.push_back(character),
+                            };
                             continue;
                         }
                         CursorSeek::Stop => {
@@ -196,32 +194,28 @@ impl Cursor {
                         continue;
                     }
                     CursorSeek::AdvanceByCharCount(n) => {
-                        result.push(character);
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
+                        cached_char_until_count += n+1;
 
-                        // NOTE: n-1 to take into account the implicit "Continue" on the first
-                        // character
-                        cached_char_until_count += n-1;
+                        // NOTE: re-add the character back to the characters vec, so that it
+                        // can be skipped with the AdvanceByCharCount skip code
+                        match direction {
+                            Direction::Forwards => characters.push_front(character),
+                            Direction::Backwards => characters.push_back(character),
+                        };
                         continue;
                     }
                     CursorSeek::AdvanceUntil {
                         until_fn: char_until_fn,
                     } => {
-                        result.push(character);
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
-
                         advance_until_fn_stack.push(char_until_fn);
-                        // NOTE: 1 to take into account the implicit "Continue" on the first
-                        // character
-                        advance_until_char_counter_stack.push(1);
+                        advance_until_char_counter_stack.push(0);
+
+                        // NOTE: re-add the character back to the characters vec, so that it
+                        // can be skipped with the AdvanceByCharCount skip code
+                        match direction {
+                            Direction::Forwards => characters.push_front(character),
+                            Direction::Backwards => characters.push_back(character),
+                        };
                         continue;
                     }
                     CursorSeek::Stop => {
