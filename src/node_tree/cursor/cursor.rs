@@ -302,7 +302,8 @@ pub struct Selection {
 
 impl Debug for Selection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Selection({:?}, primary={:?} secondary={:?})", self.literal(), self.primary, self.secondary)
+        let literal = self.literal();
+        write!(f, "Selection({:?}, len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
     }
 }
 
