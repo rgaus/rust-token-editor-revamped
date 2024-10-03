@@ -116,6 +116,21 @@ fn main() {
     InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("BLEW!"), 0);
     InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("YOO"), 0);
     InMemoryNode::dump(&parent);
+    println!("------");
+
+    let cur = Cursor::new_at(parent.borrow().children[2].clone(), 0);
+    let mut selection = cur.selection();
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until(|node, ct| {
+        if ct <= 2 {
+            CursorSeek::Continue
+        } else {
+            CursorSeek::Done
+        }
+    })));
+
+    println!("SELECTION: {selection:?}");
 
     // let cur = Cursor::new_at(parent, 0);
     // // let cur = Cursor::new(parent);
