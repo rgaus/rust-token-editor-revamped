@@ -319,11 +319,13 @@ impl Selection {
         Self { secondary: cursor.clone(), primary: cursor }
     }
 
-    pub fn set_primary(self: &mut Self, input: (Cursor, String)) {
+    pub fn set_primary(self: &mut Self, input: (Cursor, String)) -> &mut Self {
         self.secondary = input.0;
+        self
     }
-    pub fn set_secondary(self: &mut Self, input: (Cursor, String)) {
+    pub fn set_secondary(self: &mut Self, input: (Cursor, String)) -> &mut Self {
         self.secondary = input.0;
+        self
     }
 
     /// When called, computes the underlying literal text that the selection has covered.
