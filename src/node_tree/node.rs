@@ -325,13 +325,14 @@ impl InMemoryNode {
     }
 
     /// When called, adds the given `child` to the `parent` at the beginning of its children Vec.
+    /// Returns the new child node.
     ///
     /// This is identical to InMemoryNode::insert_child(parent, child, 0).
-    pub fn prepend_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
+    pub fn prepend_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
         Self::insert_child(parent, child, 0)
     }
 
-    pub fn insert_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>, index: usize) {
+    pub fn insert_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>, index: usize) -> Rc<RefCell<Self>> {
         println!(
             "CHILD: {:?} PARENT: {:?} INDEX: {}",
             child.borrow().metadata,
@@ -403,9 +404,11 @@ impl InMemoryNode {
                 };
             }
         }
+
+        child
     }
 
-    pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) {
+    pub fn append_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
         println!(
             "CHILD: {:?} PARENT: {:?}",
             child.borrow().metadata,
@@ -557,6 +560,8 @@ impl InMemoryNode {
             // Step 7: Update parent.last_child to be child
             (*parent_mut).last_child = Some(Rc::downgrade(&child));
         }
+
+        child
     }
 
     /// Removes a child node from a tree. Returns the parent node of the removed node, or None if
