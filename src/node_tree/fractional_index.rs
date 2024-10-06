@@ -28,6 +28,8 @@ impl FractionalIndex {
 
     pub fn generate(previous: Self, next: Self) -> Self {
         let new_value = (previous.0 / 2) + (next.0 / 2);
+        assert_ne!(previous.0, new_value, "FractionalIndex: ran out of precision to represent new entry!");
+        assert_ne!(next.0, new_value, "FractionalIndex: ran out of precision to represent new entry!");
         Self(new_value)
     }
 
