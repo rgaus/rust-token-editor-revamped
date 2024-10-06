@@ -58,17 +58,41 @@ impl FractionalIndex {
 }
 
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord)]
 pub struct VariableSizeFractionalIndex(Vec<u8>);
 
 impl Display for VariableSizeFractionalIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let places = u8::MAX.checked_ilog(8).unwrap();
         let entries = self.0.iter()
-            .map(|entry| format!("{:0>8}", entry))
+            .map(|entry| format!("{}", entry))
             .collect::<Vec<String>>()
             .join(",");
         write!(f, "VariableSizeFractionalIndex({entries})")
+    }
+}
+
+impl PartialOrd for VariableSizeFractionalIndex {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let longer_length = if self.0.len() < other.0.len() {
+            other.0.len()
+        } else {
+            self.0.len()
+        };
+
+        for index in 0..longer_length {
+            let a = self.0.get(index).unwrap_or(&0);
+            let b = other.0.get(index).unwrap_or(&0);
+            if a == b {
+                continue;
+            } else if a < b {
+                return Some(std::cmp::Ordering::Less);
+            } else if a > b {
+                return Some(std::cmp::Ordering::Greater);
+            }
+        }
+
+        Some(std::cmp::Ordering::Equal)
     }
 }
 
@@ -89,56 +113,77 @@ impl VariableSizeFractionalIndex {
         } else {
             (next.0.len(), previous.0.len())
         };
-        dbg!(shorter_length);
+        // dbg!(shorter_length);
 
         for index in (0..shorter_length+1).rev() {
             let previous_ancestry = &previous.0[..index];
             let next_ancestry = &next.0[..index];
-            println!("ancestry: {index} {previous_ancestry:?} {next_ancestry:?}");
+            // println!("ancestry: {index} {previous_ancestry:?} {next_ancestry:?}");
             if previous_ancestry != next_ancestry {
                 continue;
             }
 
-            let previous_lead = previous.0.get(index).unwrap_or(&0u8);
-            let next_lead = next.0.get(index).unwrap_or(&0u8);
+            // SPECIAL CASE: if the first values after the shared ancestry are not equal, then
+            // make the generated index in between these unequal values. This isn't the _exact_
+            // center but doing this optimizes for smaller indexes at the expense of them being a
+            // little less well distributed among the entire range.
+            let previous_head = previous.0.get(index);
+            let next_head = next.0.get(index);
+            if let (Some(previous_head), Some(next_head)) = (previous_head, next_head) {
+                if previous_head != next_head {
+                    let mut result = previous.0.clone();
+                    let value = average_u8(*previous_head, *next_head);
+                    result.pop();
+                    result.push(if value == *previous_head {
+                        u8::MAX / 2
+                    } else {
+                        value
+                    });
+                    return Self(result);
+                };
+            };
 
             let previous_tail = previous.0[index..].last().unwrap_or(&0u8);
             let next_tail = next.0[index..].last().unwrap_or(&0u8);
-            println!("prev_lead={previous_lead} next_lead={next_lead} previous_tail={previous_tail} next_tail={next_tail}");
 
-            // The new lead should be equidistant between previous_lead and next_lead
-            let new_lead = average_u8(*previous_lead, *next_lead);
-            dbg!(new_lead);
-
-            // And the new tail should be 0 ...
             let mut before_tail = vec![];
-            let mut new_tail = 0;
-            if new_lead == *previous_lead {
-                // ... unless the new_lead is the same as previous_lead, which in practice only
-                // happens if the previous_lead is (for example) 5 and the next_lead is (for
+            // The new tail should be equidistant between previous_tail and next_tail
+            let mut new_tail = average_u8(*previous_tail, *next_tail);
+            loop {
+                // println!("---");
+                // println!("previous_tail={previous_tail} next_tail={next_tail}");
+                // println!("BEFORE: {:?} NEW TAIL: {}", before_tail, new_tail);
+                if before_tail.len() >= longer_length-index {
+                    break;
+                }
+
+                let previous_tail = previous.0.get(index + before_tail.len()).unwrap_or(&0u8);
+                let next_tail = next.0.get(index + before_tail.len()).unwrap_or(&0u8);
+
+                // ... unless the new_tail is the same as previous_tail, which in practice only
+                // happens if the previous_tail is (for example) 5 and the next_lead is (for
                 // example) 6, so there's no space in between to fit in another number.
                 //
                 // So, in this case, push the tail forward to offset it into its midpoint ...
+                before_tail.push(average_u8(*previous_tail, *next_tail));
                 new_tail = u8::MAX / 2;
 
                 let new_tail_before_previous_tail = *previous_tail >= new_tail;
-                let new_tail_after_next_tail = next_lead == previous_lead && new_tail >= *next_tail;
+                let new_tail_after_next_tail = next_tail == previous_tail && new_tail >= *next_tail;
                 if new_tail_before_previous_tail || new_tail_after_next_tail {
                     // ... unless this hasn't pushed it forward enough, because the previous_tail is
                     // already beyond this new_tail point. In this case, find the midpoint between 
                     new_tail = average_u8(*previous_tail, *next_tail);
 
                     if new_tail == *previous_tail {
-                        before_tail.push(new_tail);
-                        new_tail = u8::MAX / 2;
+                        continue;
                     }
                 }
-            }
+            };
 
-            println!("NEW LEAD: {} NEW TAIL: {}", new_lead, new_tail);
             // [..., new_lead, new_tail]
             let mut result = previous_ancestry.to_vec();
-            result.push(new_lead);
+            // println!("RESULT: {:?} BEFORE: {:?} NEW TAIL: {}", result, before_tail, new_tail);
             for n in before_tail.into_iter() {
                 result.push(n);
             }

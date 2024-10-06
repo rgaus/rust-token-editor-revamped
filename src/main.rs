@@ -507,7 +507,7 @@ fn main() {
     // rslint_example::main();
     println!("-------");
     let a = VariableSizeFractionalIndex::of(vec![0]);
-    let b = VariableSizeFractionalIndex::of(vec![0, 0, 1]);
+    let b = VariableSizeFractionalIndex::of(vec![0, 0, 1, 5]);
     let c = VariableSizeFractionalIndex::generate(a.clone(), b.clone());
     println!("A: {a:?}");
     println!("C: {c:?}");
