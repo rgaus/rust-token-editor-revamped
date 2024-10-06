@@ -332,18 +332,28 @@ fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefC
                     },
                 };
                 let child = InMemoryNode::new_with_metadata(node_metadata);
+                let child_literal = InMemoryNode::literal(&child);
+
+                // Remove literal text from parent nodes that is replicated in the child node
+                let parent_metadata = pointer.borrow().metadata.clone();
+                if let NodeMetadata::AstNode{ kind, literal: Some(pointer_literal) } = parent_metadata {
+                    let new_literal = if pointer_literal.starts_with(&child_literal) {
+                        pointer_literal.chars().skip(child_literal.len()).collect::<String>()
+                    } else {
+                        pointer_literal
+                    };
+                    pointer.borrow_mut().metadata = NodeMetadata::AstNode {
+                        kind,
+                        literal: if new_literal.is_empty() { None } else { Some(new_literal) },
+                    };
+                }
+
                 pointer = InMemoryNode::append_child(&pointer, child);
                 level += 1;
             }
             WalkEvent::Leave(_) => {
-                // Get rid of literal text for non leaf nodes
                 let parent_upgraded = pointer.borrow().parent.clone().map(|n| n.upgrade());
                 if let Some(Some(parent)) = parent_upgraded {
-                    let parent_metadata = parent.borrow().metadata.clone();
-                    let parent_children_is_empty = parent.borrow().children.is_empty();
-                    if let (NodeMetadata::AstNode{ kind, .. }, false) = (parent_metadata, parent_children_is_empty) {
-                        parent.borrow_mut().metadata = NodeMetadata::AstNode { kind, literal: None };
-                    }
                     pointer = parent;
                 }
 
@@ -361,6 +371,16 @@ pub fn main() {
       let foo = "brew";
       function main() {
           console.log("hello world");
+      }
+
+      function fizbuzz(n) {
+        if (n % 2 == 0) {
+            return "fizz";
+        } else if (n % 3 == 0) {
+            return "buzz";
+        } else {
+            return "fizzbuzz";
+        }
       }
     "#, 0);
     // The untyped syntax node of `foo.bar[2]`, the root node is `Script`.
