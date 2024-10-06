@@ -304,8 +304,8 @@ pub struct Selection<TokenKind: TokenKindTrait> {
 
 impl<TokenKind: TokenKindTrait> Debug for Selection<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let literal = self.literal();
-        write!(f, "Selection({:?}, len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
+        let literal = self.literal_colors();
+        write!(f, "Selection(literal=\"{}\", len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
     }
 }
 
@@ -359,7 +359,11 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
             );
 
             // Apply the proper colors to the string, if required
-            return InMemoryNode::literal_colored(&self.primary.node, &literal_section);
+            return if include_terminal_colors {
+                InMemoryNode::literal_colored(&self.primary.node, &literal_section)
+            } else {
+                literal_section.into()
+            };
         };
 
         // If the node selection spans multiple nodes, then:
@@ -386,7 +390,11 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 NodeSeek::Stop
             } else {
                 let literal = InMemoryNode::literal(node);
-                let literal_colored = InMemoryNode::literal_colored(&node, &literal);
+                let literal_colored = if include_terminal_colors {
+                    InMemoryNode::literal_colored(&node, &literal)
+                } else {
+                    literal.into()
+                };
                 NodeSeek::Continue(literal_colored)
             }
         });
