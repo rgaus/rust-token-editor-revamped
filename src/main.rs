@@ -1,4 +1,5 @@
 mod node_tree;
+mod rslint_example;
 
 use node_tree::cursor::Selection;
 
@@ -165,4 +166,5 @@ fn main() {
     // let d = FractionalIndex::generate_or_fallback(Some(a), Some(c));
 
     // println!("{a} {b} {c} {d}");
+    rslint_example::main();
 }

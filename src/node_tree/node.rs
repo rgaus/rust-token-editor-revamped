@@ -25,6 +25,7 @@ pub enum NodeSeek<Item> {
 pub enum NodeMetadata {
     Empty,
     Literal(String),
+    AstNode(String, String),
     Whitespace(String),
 }
 
@@ -256,10 +257,10 @@ impl InMemoryNode {
     }
 
     pub fn literal(node: &Rc<RefCell<Self>>) -> String {
-        if let NodeMetadata::Literal(literal) = node.borrow().metadata.clone() {
-            literal
-        } else {
-            "".into()
+        match node.borrow().metadata.clone() {
+            NodeMetadata::Literal(literal) => literal,
+            NodeMetadata::AstNode(_type, literal) => literal,
+            _ => "".into(),
         }
     }
     pub fn literal_substring(node: &Rc<RefCell<Self>>, start: usize, length: usize) -> String {
