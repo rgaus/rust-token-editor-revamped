@@ -21,15 +21,19 @@ pub enum NodeSeek<Item> {
     Done(Item),     // Finish and do include this token
 }
 
+pub trait TokenKindTrait: Clone + Debug + PartialEq {
+    // TODO: add logic to handle setting effects
+}
+
 #[derive(Clone, PartialEq)]
-pub enum NodeMetadata<TokenKind: Clone + Debug + PartialEq> {
+pub enum NodeMetadata<TokenKind: TokenKindTrait> {
     Empty,
     Literal(String),
     AstNode { kind: TokenKind, literal: Option<String> },
     Whitespace(String),
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> Debug for NodeMetadata<TokenKind> {
+impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Empty => write!(f, "EMPTY"),
@@ -46,7 +50,7 @@ impl<TokenKind: Clone + Debug + PartialEq> Debug for NodeMetadata<TokenKind> {
 /// linked list (ie, next / previous) to allow for fast traversal both linearly (ie, for printing
 /// outputs) and hierarchically (ie, for performing language server like tasks)
 #[derive(Debug, Clone)]
-pub struct InMemoryNode<TokenKind: Clone + Debug + PartialEq> {
+pub struct InMemoryNode<TokenKind: TokenKindTrait> {
     pub index: FractionalIndex,
     pub metadata: NodeMetadata<TokenKind>,
 
@@ -62,7 +66,7 @@ pub struct InMemoryNode<TokenKind: Clone + Debug + PartialEq> {
     pub previous: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> InMemoryNode<TokenKind> {
+impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn new_empty() -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Empty)
     }
@@ -934,13 +938,13 @@ impl<TokenKind: Clone + Debug + PartialEq> InMemoryNode<TokenKind> {
     }
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> PartialEq for InMemoryNode<TokenKind> {
+impl<TokenKind: TokenKindTrait> PartialEq for InMemoryNode<TokenKind> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
     }
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> PartialOrd for InMemoryNode<TokenKind> {
+impl<TokenKind: TokenKindTrait> PartialOrd for InMemoryNode<TokenKind> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.index < other.index {
             Some(std::cmp::Ordering::Less)

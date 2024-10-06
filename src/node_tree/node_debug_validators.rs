@@ -1,16 +1,16 @@
-use crate::node_tree::node::{InMemoryNode, NodeMetadata};
+use crate::node_tree::node::{InMemoryNode, NodeMetadata, TokenKindTrait};
 use std::{cell::RefCell, rc::Rc};
 use std::fmt::Debug;
 
 /// Currently, there is no way to check to see if nodes that could be copies of each other are
 /// equal. I may add an id or something like that. Until then, check to see if their metadata
 /// matches, which should be good enough a large percentage of the time.
-fn nodes_equal_by_hueristic<TokenKind: Clone + Debug + PartialEq>(a: &Rc<RefCell<InMemoryNode<TokenKind>>>, b: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> bool {
+fn nodes_equal_by_hueristic<TokenKind: TokenKindTrait>(a: &Rc<RefCell<InMemoryNode<TokenKind>>>, b: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> bool {
     a.borrow().metadata == b.borrow().metadata
 }
 
 #[derive(Debug)]
-pub enum NodeNextValidReason<TokenKind: Clone + Debug + PartialEq> {
+pub enum NodeNextValidReason<TokenKind: TokenKindTrait> {
     Yes,
     UnsetExpectedFirstChild,
     ExpectedFirstChild(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
@@ -27,7 +27,7 @@ pub enum NodeNextValidReason<TokenKind: Clone + Debug + PartialEq> {
 /// is weakref'd to the correct node.
 ///
 /// Note that the only references this function assumes are correct are those in `wrapped_node.children`.
-pub fn validate_node_next<TokenKind: Clone + Debug + PartialEq>(
+pub fn validate_node_next<TokenKind: TokenKindTrait>(
     wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>,
     parent_expected_index_within_children: Option<usize>,
 ) -> NodeNextValidReason<TokenKind> {
@@ -160,7 +160,7 @@ pub fn validate_node_next<TokenKind: Clone + Debug + PartialEq>(
 }
 
 #[derive(Debug)]
-pub enum NodePreviousValidReason<TokenKind: Clone + Debug + PartialEq> {
+pub enum NodePreviousValidReason<TokenKind: TokenKindTrait> {
     Yes,
     UnsetExpectedParent,
     ExpectedParent(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
@@ -177,7 +177,7 @@ pub enum NodePreviousValidReason<TokenKind: Clone + Debug + PartialEq> {
     InIsolatedTree,
 }
 
-pub fn validate_node_previous<TokenKind: Clone + Debug + PartialEq>(wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> NodePreviousValidReason<TokenKind> {
+pub fn validate_node_previous<TokenKind: TokenKindTrait>(wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> NodePreviousValidReason<TokenKind> {
     let node = wrapped_node.borrow();
 
     let node_previous = if let Some(node_previous) = node.previous.clone() {

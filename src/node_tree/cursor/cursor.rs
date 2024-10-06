@@ -1,6 +1,6 @@
 use crate::node_tree::{
     cursor::CursorSeek,
-    node::{InMemoryNode, NodeSeek},
+    node::{InMemoryNode, NodeSeek, TokenKindTrait},
     utils::{Direction, Inclusivity},
 };
 use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
@@ -9,12 +9,12 @@ use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
 /// its contents or to perform operations on the node tree.
 #[derive(Clone)]
-pub struct Cursor<TokenKind: Clone + Debug + PartialEq> {
+pub struct Cursor<TokenKind: TokenKindTrait> {
     node: Rc<RefCell<InMemoryNode<TokenKind>>>,
     offset: usize,
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> Debug for Cursor<TokenKind> {
+impl<TokenKind: TokenKindTrait> Debug for Cursor<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Cursor")
          .field(&self.node.borrow().metadata)
@@ -23,7 +23,7 @@ impl<TokenKind: Clone + Debug + PartialEq> Debug for Cursor<TokenKind> {
     }
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> Cursor<TokenKind> {
+impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     pub fn new(node: Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
         Self::new_at(node, 0)
     }
@@ -295,19 +295,19 @@ impl<TokenKind: Clone + Debug + PartialEq> Cursor<TokenKind> {
 
 
 #[derive(Clone)]
-pub struct Selection<TokenKind: Clone + Debug + PartialEq> {
+pub struct Selection<TokenKind: TokenKindTrait> {
     pub primary: Cursor<TokenKind>,
     pub secondary: Cursor<TokenKind>,
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> Debug for Selection<TokenKind> {
+impl<TokenKind: TokenKindTrait> Debug for Selection<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let literal = self.literal();
         write!(f, "Selection({:?}, len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
     }
 }
 
-impl<TokenKind: Clone + Debug + PartialEq> Selection<TokenKind> {
+impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     pub fn new(node: Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
         Self::new_at(node, 0)
     }

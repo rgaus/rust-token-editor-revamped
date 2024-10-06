@@ -1,7 +1,7 @@
 mod node_tree;
 mod rslint_example;
 
-use node_tree::cursor::Selection;
+use node_tree::{cursor::Selection, node::TokenKindTrait};
 use rslint_parser::SyntaxKind;
 
 use crate::node_tree::{
@@ -10,6 +10,8 @@ use crate::node_tree::{
     utils::Inclusivity,
     fractional_index::FractionalIndex,
 };
+
+impl TokenKindTrait for SyntaxKind {}
 
 fn main() {
     // let foo = mini_js::parse_string(r#"
