@@ -8,7 +8,7 @@ use crate::node_tree::{
     utils::{Direction, Inclusivity},
     fractional_index::FractionalIndex,
 };
-use colored::Colorize;
+use colored::{Colorize, ColoredString};
 use std::{
     cell::{RefCell, RefMut},
     rc::{Rc, Weak}, fmt::Debug,
@@ -23,6 +23,10 @@ pub enum NodeSeek<Item> {
 
 pub trait TokenKindTrait: Clone + Debug + PartialEq {
     // TODO: add logic to handle setting effects
+
+    /// When called, determine the color the given text should render with when rendered into a
+    /// terminal to properly apply syntax highlighting.
+    fn apply_debug_syntax_color(text: String, token_kind_ancestry: std::vec::IntoIter<Self>) -> ColoredString;
 }
 
 #[derive(Clone, PartialEq)]
@@ -284,6 +288,28 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     }
     pub fn set_literal(node: &Rc<RefCell<Self>>, new_literal: &str) {
         (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
+    }
+
+    pub fn literal_colored(node: &Rc<RefCell<Self>>, literal: &str) -> ColoredString {
+        let ancestry = {
+            let mut ancestry = vec![];
+
+            let mut pointer = node.borrow().clone();
+            loop {
+                if let NodeMetadata::AstNode { kind, .. } = pointer.metadata {
+                    ancestry.push(kind);
+                }
+                if let Some(Some(parent)) = pointer.parent.map(|n| n.upgrade()) {
+                    pointer = parent.borrow().clone();
+                } else {
+                    break;
+                }
+            }
+
+            ancestry
+        };
+
+        TokenKind::apply_debug_syntax_color(literal.into(), ancestry.into_iter())
     }
 
     /// This is called after a node is inserted into the tree to assign it a correct fractional

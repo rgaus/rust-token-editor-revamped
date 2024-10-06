@@ -1,6 +1,8 @@
+use colored::{ColoredString, Colorize};
+
 use crate::node_tree::{
     cursor::CursorSeek,
-    node::{InMemoryNode, NodeSeek, TokenKindTrait},
+    node::{InMemoryNode, NodeSeek, TokenKindTrait, NodeMetadata},
     utils::{Direction, Inclusivity},
 };
 use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
@@ -330,6 +332,17 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
 
     /// When called, computes the underlying literal text that the selection has covered.
     pub fn literal(self: &Self) -> String {
+        let colored_result = self.generate_literal(false);
+        format!("{}", colored_result.clear())
+    }
+    /// When called, computes the underlying literal text that the selection has covered. Returns
+    /// the output with terminal syntax colors injected for pretty printing.
+    pub fn literal_colors(self: &Self) -> ColoredString {
+        self.generate_literal(true)
+    }
+
+    /// When called, computes the underlying literal text that the selection has covered.
+    fn generate_literal(self: &Self, include_terminal_colors: bool) -> ColoredString {
         // If the node selection spans within a single node, then take a substring of the common
         // literal value based on the offsets.
         if self.primary.node == self.secondary.node {
@@ -339,11 +352,14 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 self.secondary.offset
             };
             let literal_length = self.secondary.offset.abs_diff(self.primary.offset);
-            return InMemoryNode::literal_substring(
+            let literal_section = InMemoryNode::literal_substring(
                 &self.primary.node,
                 literal_start_offset,
                 literal_length,
             );
+
+            // Apply the proper colors to the string, if required
+            return InMemoryNode::literal_colored(&self.primary.node, &literal_section);
         };
 
         // If the node selection spans multiple nodes, then:
@@ -370,12 +386,16 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 NodeSeek::Stop
             } else {
                 let literal = InMemoryNode::literal(node);
-                NodeSeek::Continue(literal)
+                let literal_colored = InMemoryNode::literal_colored(&node, &literal);
+                NodeSeek::Continue(literal_colored)
             }
         });
 
         // 4. Combine it all together!
-        format!("{earlier_suffix}{}{later_prefix}", in_between_node_literals.collect::<String>())
+        let in_between = in_between_node_literals.fold::<ColoredString, _>("".into(), |acc, colored_str| {
+            format!("{}{}", acc, colored_str).into()
+        });
+        format!("{earlier_suffix}{in_between}{later_prefix}").into()
     }
 
     /// When called, deletes the character span referred to by the selection.

@@ -358,7 +358,7 @@ fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefC
 
 pub fn main() {
     let parse = parse_text(r#"
-      let foo = 123;
+      let foo = "brew";
       function main() {
           console.log("hello world");
       }
@@ -373,7 +373,7 @@ pub fn main() {
     println!("----------");
     InMemoryNode::dump(&root);
 
-    let cursor = Cursor::new(root);
-    let (_, result) = cursor.seek_forwards_until(|_n, _ct| CursorSeek::Continue);
-    println!("RESULT: {result}");
+    let mut selection = Cursor::new(root).selection();
+    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    println!("RESULT: {}", selection.literal_colors());
 }
