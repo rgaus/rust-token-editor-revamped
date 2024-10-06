@@ -14,7 +14,7 @@ use crate::node_tree::{
         InMemoryNode,
         // NodeSeek,
     },
-    utils::Inclusivity,
+    utils::Inclusivity, fractional_index::VariableSizeFractionalIndex,
     // fractional_index::FractionalIndex,
 };
 
@@ -503,5 +503,13 @@ fn main() {
     // let d = FractionalIndex::generate_or_fallback(Some(a), Some(c));
 
     // println!("{a} {b} {c} {d}");
-    rslint_example::main();
+
+    // rslint_example::main();
+    println!("-------");
+    let a = VariableSizeFractionalIndex::of(vec![0]);
+    let b = VariableSizeFractionalIndex::of(vec![0, 0, 1]);
+    let c = VariableSizeFractionalIndex::generate(a.clone(), b.clone());
+    println!("A: {a:?}");
+    println!("C: {c:?}");
+    println!("B: {b:?}");
 }
