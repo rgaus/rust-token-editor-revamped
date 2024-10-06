@@ -1,11 +1,11 @@
 use std::{rc::Rc, cell::RefCell};
-use rslint_parser::{ast::BracketExpr, parse_text, AstNode, SyntaxToken, SyntaxNodeExt, util, SyntaxNode, WalkEvent, NodeOrToken};
+use rslint_parser::{ast::BracketExpr, parse_text, AstNode, SyntaxToken, SyntaxNodeExt, util, SyntaxNode, WalkEvent, NodeOrToken, SyntaxKind};
 use crate::node_tree::{
     node::{InMemoryNode, NodeMetadata},
     cursor::{Cursor, CursorSeek},
 };
 
-fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefCell<InMemoryNode>> {
+fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefCell<InMemoryNode<SyntaxKind>>> {
     // let node_literal = match syntax_node.kind() {
     //     rslint_parser::SyntaxKind::TOMBSTONE => format!("TOMBSTONE {:?}", syntax_node.text()),
     //     rslint_parser::SyntaxKind::EOF => format!("EOF {:?}", syntax_node.text()),
@@ -322,8 +322,14 @@ fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefC
                 //     write!(f, "  ")?;
                 // }
                 let node_metadata = match element {
-                    NodeOrToken::Node(node) => NodeMetadata::AstNode(format!("{:?}", node.kind()), format!("{}", node.text())),
-                    NodeOrToken::Token(token) => NodeMetadata::AstNode(format!("{:?}", token.kind()), format!("{}", token.text())),
+                    NodeOrToken::Node(node) => NodeMetadata::AstNode {
+                        kind: node.kind(),
+                        literal: Some(format!("{}", node.text())),
+                    },
+                    NodeOrToken::Token(token) => NodeMetadata::AstNode {
+                        kind: token.kind(),
+                        literal: Some(format!("{}", token.text())),
+                    },
                 };
                 let child = InMemoryNode::new_with_metadata(node_metadata);
                 pointer = InMemoryNode::append_child(&pointer, child);
@@ -335,8 +341,8 @@ fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefC
                 if let Some(Some(parent)) = parent_upgraded {
                     let parent_metadata = parent.borrow().metadata.clone();
                     let parent_children_is_empty = parent.borrow().children.is_empty();
-                    if let (NodeMetadata::AstNode(node_type, _literal), false) = (parent_metadata, parent_children_is_empty) {
-                        parent.borrow_mut().metadata = NodeMetadata::AstNode(node_type, "".into());
+                    if let (NodeMetadata::AstNode{ kind, .. }, false) = (parent_metadata, parent_children_is_empty) {
+                        parent.borrow_mut().metadata = NodeMetadata::AstNode { kind, literal: None };
                     }
                     pointer = parent;
                 }
@@ -367,7 +373,7 @@ pub fn main() {
     println!("----------");
     InMemoryNode::dump(&root);
 
-    let mut cursor = Cursor::new(root);
-    let (_, result) = cursor.seek_forwards_until(|n, ct| CursorSeek::Continue);
+    let cursor = Cursor::new(root);
+    let (_, result) = cursor.seek_forwards_until(|_n, _ct| CursorSeek::Continue);
     println!("RESULT: {result}");
 }

@@ -9,12 +9,12 @@ use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
 /// its contents or to perform operations on the node tree.
 #[derive(Clone)]
-pub struct Cursor {
-    node: Rc<RefCell<InMemoryNode>>,
+pub struct Cursor<TokenKind: Clone + Debug + PartialEq> {
+    node: Rc<RefCell<InMemoryNode<TokenKind>>>,
     offset: usize,
 }
 
-impl Debug for Cursor {
+impl<TokenKind: Clone + Debug + PartialEq> Debug for Cursor<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Cursor")
          .field(&self.node.borrow().metadata)
@@ -23,11 +23,11 @@ impl Debug for Cursor {
     }
 }
 
-impl Cursor {
-    pub fn new(node: Rc<RefCell<InMemoryNode>>) -> Self {
+impl<TokenKind: Clone + Debug + PartialEq> Cursor<TokenKind> {
+    pub fn new(node: Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
         Self::new_at(node, 0)
     }
-    pub fn new_at(node: Rc<RefCell<InMemoryNode>>, offset: usize) -> Self {
+    pub fn new_at(node: Rc<RefCell<InMemoryNode<TokenKind>>>, offset: usize) -> Self {
         Self { node, offset }
     }
 
@@ -35,7 +35,7 @@ impl Cursor {
     ///
     /// A Selection is a "double ended" cursor that can be used to define text ranges to perform
     /// operations on.
-    pub fn selection(self: &Self) -> Selection {
+    pub fn selection(self: &Self) -> Selection<TokenKind> {
         Selection::new_from_cursor(self.clone())
     }
 
@@ -98,7 +98,7 @@ impl Cursor {
                 Direction::Forwards => characters.pop_front(),
                 Direction::Backwards => characters.pop_back(),
             } {
-                println!("INITIAL NEW_OFFSET: {new_offset} ({global_char_counter}, {character})");
+                // println!("INITIAL NEW_OFFSET: {new_offset} ({global_char_counter}, {character})");
                 // If there's a char_until_count, then run until that exhausts iself
                 if cached_char_until_count > 0 {
                     cached_char_until_count -= 1;
@@ -295,35 +295,35 @@ impl Cursor {
 
 
 #[derive(Clone)]
-pub struct Selection {
-    pub primary: Cursor,
-    pub secondary: Cursor,
+pub struct Selection<TokenKind: Clone + Debug + PartialEq> {
+    pub primary: Cursor<TokenKind>,
+    pub secondary: Cursor<TokenKind>,
 }
 
-impl Debug for Selection {
+impl<TokenKind: Clone + Debug + PartialEq> Debug for Selection<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let literal = self.literal();
         write!(f, "Selection({:?}, len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
     }
 }
 
-impl Selection {
-    pub fn new(node: Rc<RefCell<InMemoryNode>>) -> Self {
+impl<TokenKind: Clone + Debug + PartialEq> Selection<TokenKind> {
+    pub fn new(node: Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
         Self::new_at(node, 0)
     }
-    pub fn new_at(node: Rc<RefCell<InMemoryNode>>, offset: usize) -> Self {
+    pub fn new_at(node: Rc<RefCell<InMemoryNode<TokenKind>>>, offset: usize) -> Self {
         let cursor = Cursor::new_at(node, offset);
         Self::new_from_cursor(cursor)
     }
-    pub fn new_from_cursor(cursor: Cursor) -> Self {
+    pub fn new_from_cursor(cursor: Cursor<TokenKind>) -> Self {
         Self { secondary: cursor.clone(), primary: cursor }
     }
 
-    pub fn set_primary(self: &mut Self, input: (Cursor, String)) -> &mut Self {
+    pub fn set_primary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
         self.secondary = input.0;
         self
     }
-    pub fn set_secondary(self: &mut Self, input: (Cursor, String)) -> &mut Self {
+    pub fn set_secondary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
         self.secondary = input.0;
         self
     }

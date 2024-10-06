@@ -11,7 +11,7 @@ use crate::node_tree::{
 use colored::Colorize;
 use std::{
     cell::{RefCell, RefMut},
-    rc::{Rc, Weak},
+    rc::{Rc, Weak}, fmt::Debug,
 };
 
 /// An enum used by seek_forwards_until to control how seeking should commence.
@@ -21,12 +21,24 @@ pub enum NodeSeek<Item> {
     Done(Item),     // Finish and do include this token
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum NodeMetadata {
+#[derive(Clone, PartialEq)]
+pub enum NodeMetadata<TokenKind: Clone + Debug + PartialEq> {
     Empty,
     Literal(String),
-    AstNode(String, String),
+    AstNode { kind: TokenKind, literal: Option<String> },
     Whitespace(String),
+}
+
+impl<TokenKind: Clone + Debug + PartialEq> Debug for NodeMetadata<TokenKind> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "EMPTY"),
+            Self::Literal(text) => write!(f, "LITERAL({text})"),
+            Self::Whitespace(text) => write!(f, "WHITESPACE({text})"),
+            Self::AstNode{ kind, literal: None } => write!(f, "{}{}", "AST:".bright_black(), format!("{:?}", kind).bold().cyan()),
+            Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.on_bright_black()),
+        }
+    }
 }
 
 /// A node is the building block of a node tree, and repreents a node in an AST-like structure.
@@ -34,30 +46,30 @@ pub enum NodeMetadata {
 /// linked list (ie, next / previous) to allow for fast traversal both linearly (ie, for printing
 /// outputs) and hierarchically (ie, for performing language server like tasks)
 #[derive(Debug, Clone)]
-pub struct InMemoryNode {
+pub struct InMemoryNode<TokenKind: Clone + Debug + PartialEq> {
     pub index: FractionalIndex,
-    pub metadata: NodeMetadata,
+    pub metadata: NodeMetadata<TokenKind>,
 
     // Tree data structure refs:
-    pub parent: Option<Weak<RefCell<InMemoryNode>>>,
-    pub children: Vec<Rc<RefCell<InMemoryNode>>>,
+    pub parent: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
+    pub children: Vec<Rc<RefCell<InMemoryNode<TokenKind>>>>,
     pub child_index: Option<usize>,
-    pub first_child: Option<Weak<RefCell<InMemoryNode>>>,
-    pub last_child: Option<Weak<RefCell<InMemoryNode>>>,
+    pub first_child: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
+    pub last_child: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
 
     // Linked list data structure refs:
-    pub next: Option<Weak<RefCell<InMemoryNode>>>,
-    pub previous: Option<Weak<RefCell<InMemoryNode>>>,
+    pub next: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
+    pub previous: Option<Weak<RefCell<InMemoryNode<TokenKind>>>>,
 }
 
-impl InMemoryNode {
+impl<TokenKind: Clone + Debug + PartialEq> InMemoryNode<TokenKind> {
     pub fn new_empty() -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Empty)
     }
     pub fn new_from_literal(literal: &str) -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
     }
-    pub fn new_with_metadata(metadata: NodeMetadata) -> Rc<RefCell<Self>> {
+    pub fn new_with_metadata(metadata: NodeMetadata<TokenKind>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             index: FractionalIndex::start(),
             metadata,
@@ -259,7 +271,7 @@ impl InMemoryNode {
     pub fn literal(node: &Rc<RefCell<Self>>) -> String {
         match node.borrow().metadata.clone() {
             NodeMetadata::Literal(literal) => literal,
-            NodeMetadata::AstNode(_type, literal) => literal,
+            NodeMetadata::AstNode { literal: Some(literal), .. } => literal,
             _ => "".into(),
         }
     }
@@ -922,13 +934,13 @@ impl InMemoryNode {
     }
 }
 
-impl PartialEq for InMemoryNode {
+impl<TokenKind: Clone + Debug + PartialEq> PartialEq for InMemoryNode<TokenKind> {
     fn eq(&self, other: &Self) -> bool {
         self.index == other.index
     }
 }
 
-impl PartialOrd for InMemoryNode {
+impl<TokenKind: Clone + Debug + PartialEq> PartialOrd for InMemoryNode<TokenKind> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if self.index < other.index {
             Some(std::cmp::Ordering::Less)

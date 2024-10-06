@@ -2,6 +2,7 @@ mod node_tree;
 mod rslint_example;
 
 use node_tree::cursor::Selection;
+use rslint_parser::SyntaxKind;
 
 use crate::node_tree::{
     cursor::{Cursor, CursorSeek},
@@ -107,7 +108,7 @@ fn main() {
     //     }
     // });
 
-    let parent = InMemoryNode::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
+    let parent = InMemoryNode::<SyntaxKind>::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
     InMemoryNode::dump(&parent);
 
     println!("------");

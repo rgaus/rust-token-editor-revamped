@@ -1,35 +1,36 @@
 use crate::node_tree::node::{InMemoryNode, NodeMetadata};
 use std::{cell::RefCell, rc::Rc};
+use std::fmt::Debug;
 
 /// Currently, there is no way to check to see if nodes that could be copies of each other are
 /// equal. I may add an id or something like that. Until then, check to see if their metadata
 /// matches, which should be good enough a large percentage of the time.
-fn nodes_equal_by_hueristic(a: &Rc<RefCell<InMemoryNode>>, b: &Rc<RefCell<InMemoryNode>>) -> bool {
+fn nodes_equal_by_hueristic<TokenKind: Clone + Debug + PartialEq>(a: &Rc<RefCell<InMemoryNode<TokenKind>>>, b: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> bool {
     a.borrow().metadata == b.borrow().metadata
 }
 
 #[derive(Debug)]
-pub enum NodeNextValidReason {
+pub enum NodeNextValidReason<TokenKind: Clone + Debug + PartialEq> {
     Yes,
     UnsetExpectedFirstChild,
-    ExpectedFirstChild(NodeMetadata, NodeMetadata),
+    ExpectedFirstChild(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
     UnsetExpectedNextSibling,
-    ExpectedNextSibling(NodeMetadata, NodeMetadata),
-    UnsetExpectedRecursiveSibling(NodeMetadata, usize /* levels_upwards_traversed */),
-    ExpectedRecursiveSibling(NodeMetadata, NodeMetadata),
-    SetExpectedEOF(NodeMetadata),
+    ExpectedNextSibling(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
+    UnsetExpectedRecursiveSibling(NodeMetadata<TokenKind>, usize /* levels_upwards_traversed */),
+    ExpectedRecursiveSibling(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
+    SetExpectedEOF(NodeMetadata<TokenKind>),
     ParentWeakRefMissing,
     InIsolatedTree,
 }
 
-/// Given a InMemoryNode with potentially questionable weak refs, validate that `wrapped_node.next`
+/// Given a InMemoryNode<TokenKind> with potentially questionable weak refs, validate that `wrapped_node.next`
 /// is weakref'd to the correct node.
 ///
 /// Note that the only references this function assumes are correct are those in `wrapped_node.children`.
-pub fn validate_node_next(
-    wrapped_node: &Rc<RefCell<InMemoryNode>>,
+pub fn validate_node_next<TokenKind: Clone + Debug + PartialEq>(
+    wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>,
     parent_expected_index_within_children: Option<usize>,
-) -> NodeNextValidReason {
+) -> NodeNextValidReason<TokenKind> {
     let node = wrapped_node.borrow();
 
     let node_next = if let Some(node_next) = node.next.clone() {
@@ -159,24 +160,24 @@ pub fn validate_node_next(
 }
 
 #[derive(Debug)]
-pub enum NodePreviousValidReason {
+pub enum NodePreviousValidReason<TokenKind: Clone + Debug + PartialEq> {
     Yes,
     UnsetExpectedParent,
-    ExpectedParent(NodeMetadata, NodeMetadata),
+    ExpectedParent(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
     UnsetExpectedPreviousSiblingDeepLastChild,
     ExpectedPreviousSiblingDeepLastChild(
-        NodeMetadata,
-        NodeMetadata,
+        NodeMetadata<TokenKind>,
+        NodeMetadata<TokenKind>,
         usize, /* levels_downwards_traversed */
     ),
     UnsetExpectedPreviousSibling,
-    ExpectedPreviousSibling(NodeMetadata, NodeMetadata),
-    ExpectedParentlessNodeToHavePreviousNone(NodeMetadata),
+    ExpectedPreviousSibling(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
+    ExpectedParentlessNodeToHavePreviousNone(NodeMetadata<TokenKind>),
     ParentWeakRefMissing,
     InIsolatedTree,
 }
 
-pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodePreviousValidReason {
+pub fn validate_node_previous<TokenKind: Clone + Debug + PartialEq>(wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> NodePreviousValidReason<TokenKind> {
     let node = wrapped_node.borrow();
 
     let node_previous = if let Some(node_previous) = node.previous.clone() {
@@ -219,7 +220,7 @@ pub fn validate_node_previous(wrapped_node: &Rc<RefCell<InMemoryNode>>) -> NodeP
                 // a. Does this previous sibling have children? If so, get the deep last child of that
                 // previous sibling, and that should be `previous`
                 //
-                // NOTE: the below is a reimplementation of `InMemoryNode::deep_last_child` which
+                // NOTE: the below is a reimplementation of `InMemoryNode<TokenKind>::deep_last_child` which
                 // does not rely on anything except for `children` being properly set in each node.
                 let (previous_sibling_deep_last_child, levels_downwards_traversed) =
                     if let Some(initial_last_child) =
