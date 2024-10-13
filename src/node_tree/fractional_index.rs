@@ -1,12 +1,14 @@
 use std::fmt::Display;
 
-fn average_u8(smaller: u8, larger: u8) -> u8 {
+fn get_midpoint_u8(smaller: u8, larger: u8) -> u8 {
     if smaller == larger || smaller+1 == larger {
         // 5 and 5, or 5 and 6
         smaller
     } else if smaller+2 == larger {
         // 5 and 7
         smaller+1
+    } else if smaller == u8::MIN && larger == u8::MAX {
+        u8::MAX / 8
     } else {
         (smaller / 2) + (larger / 2)
     }
@@ -113,82 +115,26 @@ impl VariableSizeFractionalIndex {
         } else {
             (next.0.len(), previous.0.len())
         };
-        // dbg!(shorter_length);
 
         for index in (0..shorter_length+1).rev() {
             let previous_ancestry = &previous.0[..index];
             let next_ancestry = &next.0[..index];
-            // println!("ancestry: {index} {previous_ancestry:?} {next_ancestry:?}");
             if previous_ancestry != next_ancestry {
                 continue;
             }
 
-            // SPECIAL CASE: if the first values after the shared ancestry are not equal, then
-            // make the generated index in between these unequal values. This isn't the _exact_
-            // center but doing this optimizes for smaller indexes at the expense of them being a
-            // little less well distributed among the entire range.
-            let previous_head = previous.0.get(index);
-            let next_head = next.0.get(index);
-            if let (Some(previous_head), Some(next_head)) = (previous_head, next_head) {
-                if previous_head != next_head {
-                    let mut result = previous.0.clone();
-                    let value = average_u8(*previous_head, *next_head);
-                    result.pop();
-                    result.push(if value == *previous_head {
-                        u8::MAX / 2
-                    } else {
-                        value
-                    });
-                    return Self(result);
-                };
-            };
-
-            let previous_tail = previous.0[index..].last().unwrap_or(&0u8);
-            let next_tail = next.0[index..].last().unwrap_or(&0u8);
-
-            let mut before_tail = vec![];
-            // The new tail should be equidistant between previous_tail and next_tail
-            let mut new_tail = average_u8(*previous_tail, *next_tail);
-            loop {
-                // println!("---");
-                // println!("previous_tail={previous_tail} next_tail={next_tail}");
-                // println!("BEFORE: {:?} NEW TAIL: {}", before_tail, new_tail);
-                if before_tail.len() >= longer_length-index {
-                    break;
-                }
-
-                let previous_tail = previous.0.get(index + before_tail.len()).unwrap_or(&0u8);
-                let next_tail = next.0.get(index + before_tail.len()).unwrap_or(&0u8);
-
-                // ... unless the new_tail is the same as previous_tail, which in practice only
-                // happens if the previous_tail is (for example) 5 and the next_lead is (for
-                // example) 6, so there's no space in between to fit in another number.
-                //
-                // So, in this case, push the tail forward to offset it into its midpoint ...
-                before_tail.push(average_u8(*previous_tail, *next_tail));
-                new_tail = u8::MAX / 2;
-
-                let new_tail_before_previous_tail = *previous_tail >= new_tail;
-                let new_tail_after_next_tail = next_tail == previous_tail && new_tail >= *next_tail;
-                if new_tail_before_previous_tail || new_tail_after_next_tail {
-                    // ... unless this hasn't pushed it forward enough, because the previous_tail is
-                    // already beyond this new_tail point. In this case, find the midpoint between 
-                    new_tail = average_u8(*previous_tail, *next_tail);
-
-                    if new_tail == *previous_tail {
-                        continue;
-                    }
-                }
-            };
-
-            // [..., new_lead, new_tail]
             let mut result = previous_ancestry.to_vec();
-            // println!("RESULT: {:?} BEFORE: {:?} NEW TAIL: {}", result, before_tail, new_tail);
-            for n in before_tail.into_iter() {
-                result.push(n);
-            }
-            if new_tail > 0 {
+            for secondary_index in 0..longer_length {
+                let previous_tail = previous.0.get(index + secondary_index).unwrap_or(&u8::MIN);
+                let next_tail = next.0.get(index + secondary_index).unwrap_or(&u8::MAX);
+
+                let new_tail = get_midpoint_u8(*previous_tail, *next_tail);
                 result.push(new_tail);
+            };
+            // If the new generated value is the same as the previous (ie, maybe trying to pick a
+            // number between 5 and 6), then add a 127 as another place on the end.
+            if result.len() == previous.0.len() && previous.0.iter().enumerate().all(|(index, n)| *n == result[index]) {
+                result.push(get_midpoint_u8(u8::MIN, u8::MAX));
             }
             return Self(result);
         }
