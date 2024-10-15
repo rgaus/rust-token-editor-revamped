@@ -6,7 +6,7 @@ use crate::node_tree::{
         NodePreviousValidReason,
     },
     utils::{Direction, Inclusivity},
-    fractional_index::FractionalIndex,
+    fractional_index::VariableSizeFractionalIndex,
 };
 use colored::{Colorize, ColoredString};
 use std::{
@@ -55,7 +55,7 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
 /// outputs) and hierarchically (ie, for performing language server like tasks)
 #[derive(Debug, Clone)]
 pub struct InMemoryNode<TokenKind: TokenKindTrait> {
-    pub index: FractionalIndex,
+    pub index: VariableSizeFractionalIndex,
     pub metadata: NodeMetadata<TokenKind>,
 
     // Tree data structure refs:
@@ -79,7 +79,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     }
     pub fn new_with_metadata(metadata: NodeMetadata<TokenKind>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            index: FractionalIndex::start(),
+            index: VariableSizeFractionalIndex::start(),
             metadata,
             parent: None,
             children: vec![],
@@ -316,12 +316,9 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// index.
     // fn recompute_index(node: &Rc<RefCell<Self>>) {
     fn assign_index(mut node_mut: RefMut<'_, Self>) {
-        let new_index = {
-            FractionalIndex::generate_or_fallback(
-                node_mut.previous.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index),
-                node_mut.next.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index),
-            )
-        };
+        let first = node_mut.previous.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
+        let second = node_mut.next.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
+        let new_index = VariableSizeFractionalIndex::generate_or_fallback(first, second);
         (*node_mut).index = new_index;
     }
 

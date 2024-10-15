@@ -393,7 +393,7 @@ pub fn main() {
     println!("----------");
     InMemoryNode::dump(&root);
 
-    let mut selection = Cursor::new(root).selection();
-    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
-    println!("RESULT: {}", selection.literal_colors());
+    // let mut selection = Cursor::new(root).selection();
+    // selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    // println!("RESULT: {:?}", selection);
 }

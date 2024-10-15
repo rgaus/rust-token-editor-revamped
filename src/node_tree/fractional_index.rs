@@ -109,7 +109,7 @@ impl VariableSizeFractionalIndex {
         Self(raw)
     }
 
-    pub fn generate(previous: Self, next: Self) -> Self {
+    pub fn generate(previous: &Self, next: &Self) -> Self {
         let (shorter_length, longer_length) = if previous.0.len() < next.0.len() {
             (previous.0.len(), next.0.len())
         } else {
@@ -147,9 +147,9 @@ impl VariableSizeFractionalIndex {
     pub fn generate_or_fallback(previous: Option<Self>, next: Option<Self>) -> Self {
         match (previous, next) {
             (None, None) => Self::start(),
-            (None, Some(next)) => Self::generate(Self::start(), next),
-            (Some(previous), None) => Self::generate(previous, Self::end()),
-            (Some(previous), Some(next)) => Self::generate(previous, next),
+            (None, Some(next)) => Self::generate(&Self::start(), &next),
+            (Some(previous), None) => Self::generate(&previous, &Self::end()),
+            (Some(previous), Some(next)) => Self::generate(&previous, &next),
         }
     }
 }
