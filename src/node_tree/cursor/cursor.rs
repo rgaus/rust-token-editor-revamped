@@ -20,6 +20,7 @@ impl<TokenKind: TokenKindTrait> Debug for Cursor<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Cursor")
          .field(&self.node.borrow().metadata)
+         .field(&self.node.borrow().index)
          .field(&self.offset)
          .finish()
     }
