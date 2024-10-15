@@ -801,7 +801,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         direction: Direction,
         current_node_included: Inclusivity,
         until_fn: UntilFn,
-    ) -> std::vec::IntoIter<ResultItem>
+    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
@@ -930,7 +930,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         start_node: &Rc<RefCell<Self>>,
         start_node_included: Inclusivity,
         until_fn: UntilFn,
-    ) -> std::vec::IntoIter<ResultItem>
+    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
         UntilFn: Fn(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>
     {
