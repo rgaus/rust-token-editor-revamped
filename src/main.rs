@@ -1,20 +1,23 @@
 mod node_tree;
 mod rslint_example;
 
+use std::{rc::Rc, cell::RefCell};
+
 use colored::{ColoredString, Colorize};
 use node_tree::{
     // cursor::Selection,
     node::TokenKindTrait,
 };
-use rslint_parser::SyntaxKind;
+use rslint_example::convert_rslint_syntaxnode_to_inmemorynode;
+use rslint_parser::{parse_text, SyntaxKind};
 
 use crate::node_tree::{
     cursor::{Cursor, CursorSeek},
     node::{
         InMemoryNode,
         // NodeSeek,
-    },
-    utils::Inclusivity, fractional_index::VariableSizeFractionalIndex,
+    }, utils::Inclusivity,
+    // utils::Inclusivity, fractional_index::VariableSizeFractionalIndex,
     // fractional_index::FractionalIndex,
 };
 
@@ -345,6 +348,23 @@ impl TokenKindTrait for SyntaxKind {
             SyntaxKind::__LAST => text.into(),
         }
     }
+
+    fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>> {
+        let parse = parse_text(literal, 0);
+        // The untyped syntax node of `foo.bar[2]`, the root node is `Script`.
+        let untyped_expr_node = parse.syntax();
+
+        let root = convert_rslint_syntaxnode_to_inmemorynode(untyped_expr_node);
+
+        // Set the parent on the newly parsed node
+        root.borrow_mut().parent = if let Some(parent) = parent {
+            Some(Rc::downgrade(&parent))
+        } else {
+            None
+        };
+
+        root
+    }
 }
 
 fn main() {
@@ -444,6 +464,7 @@ fn main() {
     //     }
     // });
 
+    println!("------ ONE ------");
     let parent = InMemoryNode::<SyntaxKind>::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
     InMemoryNode::dump(&parent);
 
@@ -463,6 +484,7 @@ fn main() {
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive)));
 
     println!("SELECTION: {selection:?}");
+    println!("------ END ONE ------");
 
     // let cur = Cursor::new_at(parent, 0);
     // // let cur = Cursor::new(parent);
@@ -505,11 +527,42 @@ fn main() {
     // println!("{a} {b} {c} {d}");
 
     // rslint_example::main();
-    println!("-------");
-    let a = VariableSizeFractionalIndex::of(vec![0]);
-    let b = VariableSizeFractionalIndex::of(vec![0, 0, 1, 5]);
-    let c = VariableSizeFractionalIndex::generate(a.clone(), b.clone());
-    println!("A: {a:?}");
-    println!("C: {c:?}");
-    println!("B: {b:?}");
+    println!("------ TWO ------");
+    let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
+      let foo = "brew";
+      function main() {
+          console.log("hello world");
+      }
+
+      function fizbuzz(n) {
+        if (n % 2 == 0) {
+            return "fizz";
+        } else if (n % 3 == 0) {
+            return "buzz";
+        } else {
+            return "fizzbuzz";
+        }
+      }
+    "#);
+    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
+    InMemoryNode::dump(&root);
+
+    let mut selection = Cursor::new(root).selection();
+    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    println!("RESULT: {:?}", selection);
+
+    println!("------ END TWO ------");
+    // println!("-------");
+    // let a = VariableSizeFractionalIndex::of(vec![252]);
+    // let b = VariableSizeFractionalIndex::of(vec![255]);
+    // // let c = VariableSizeFractionalIndex::generate(a.clone(), b.clone());
+    // // println!("A: {a:?}");
+    // // println!("C: {c:?}");
+    // // println!("B: {b:?}");
+    // // println!("{:?}", a < c);
+
+    // let mut seq = VariableSizeFractionalIndex::eqidistributed_sequence(a, b, 10);
+    // for _ in 0..10 {
+    //     println!("=> {:?}", seq.next());
+    // }
 }

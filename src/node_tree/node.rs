@@ -27,6 +27,9 @@ pub trait TokenKindTrait: Clone + Debug + PartialEq {
     /// When called, determine the color the given text should render with when rendered into a
     /// terminal to properly apply syntax highlighting.
     fn apply_debug_syntax_color(text: String, token_kind_ancestry: std::vec::IntoIter<Self>) -> ColoredString;
+
+    /// When called, parse the literal specified, returning a new token subtree
+    fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>>;
 }
 
 #[derive(Clone, PartialEq)]
@@ -48,6 +51,7 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
         }
     }
 }
+
 
 /// A node is the building block of a node tree, and repreents a node in an AST-like structure.
 /// Nodes are linked both as a tree (ie, parent / children / etc) as well as doubly linked as a
@@ -76,6 +80,9 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     }
     pub fn new_from_literal(literal: &str) -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
+    }
+    pub fn new_from_parsed(literal: &str) -> Rc<RefCell<Self>> {
+        TokenKind::parse(literal, None)
     }
     pub fn new_with_metadata(metadata: NodeMetadata<TokenKind>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {

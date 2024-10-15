@@ -5,7 +5,7 @@ use crate::node_tree::{
     cursor::{Cursor, CursorSeek},
 };
 
-fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefCell<InMemoryNode<SyntaxKind>>> {
+pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefCell<InMemoryNode<SyntaxKind>>> {
     // let node_literal = match syntax_node.kind() {
     //     rslint_parser::SyntaxKind::TOMBSTONE => format!("TOMBSTONE {:?}", syntax_node.text()),
     //     rslint_parser::SyntaxKind::EOF => format!("EOF {:?}", syntax_node.text()),
