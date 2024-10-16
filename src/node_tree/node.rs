@@ -936,10 +936,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn remove_nodes_sequentially_until<UntilFn, ResultItem>(
         start_node: &Rc<RefCell<Self>>,
         start_node_included: Inclusivity,
-        until_fn: UntilFn,
+        mut until_fn: UntilFn,
     ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
-        UntilFn: Fn(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>
+        UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>
     {
         let node_value_pairs = Self::seek_forwards_until(start_node, start_node_included, |node, index| {
             match until_fn(node, index) {

@@ -480,13 +480,19 @@ fn main() {
     InMemoryNode::dump(&parent);
     println!("------");
 
-    let cur = Cursor::new_at(parent.borrow().children[2].clone(), 0);
+    // let cur = Cursor::new_at(parent.borrow().children[2].clone(), 0);
+    let cur = Cursor::new_at(parent.clone(), 0);
     let mut selection = cur.selection();
-    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(2)));
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive)));
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive)));
-
     println!("SELECTION: {selection:?}");
+    selection.delete().unwrap();
+
+    println!("------");
+    // InMemoryNode::dump(&parent);
+    println!("{:?}", Selection::new_across_subtree(&parent));
+
     println!("------ END ONE ------");
 
     // let cur = Cursor::new_at(parent, 0);
@@ -550,9 +556,17 @@ fn main() {
     // let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
     InMemoryNode::dump(&root);
 
-    let mut selection = Cursor::new(root).selection();
-    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
-    println!("RESULT: {:?}", selection);
+    let mut selection = Cursor::new(root.clone()).selection();
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(13)));
+    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(30)));
+    println!("PRE: {:?}\n", selection);
+    selection.delete().unwrap();
+    // println!("POST: {:?}", Selection::new_across_subtree(&root));
+    InMemoryNode::dump(&root);
+
+    // let mut selection = Cursor::new(root).selection();
+    // selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    // println!("RESULT: {:?}", selection);
 
     println!("------ END TWO ------");
     // println!("-------");

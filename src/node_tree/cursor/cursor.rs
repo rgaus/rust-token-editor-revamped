@@ -469,36 +469,43 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
             InMemoryNode::literal(&later_cursor.node).len() - later_cursor.offset,
         );
 
-        // 3. Delete all nodes starting at after the earlier node up to and including the later node
-        InMemoryNode::remove_nodes_sequentially_until(&earlier_cursor.node, Inclusivity::Exclusive, |node, _ct| {
-            if node == &later_cursor.node {
-                NodeSeek::Done(())
-            } else {
-                NodeSeek::Continue(())
-            }
-        });
-
-        // 4. Keep going, storing literal text until back up at the same depth level as the
-        //    earlier node. Swap the earlier node with a new node containing literal text of all
-        //    the accumulated text.
         let earlier_node_depth = InMemoryNode::depth(&earlier_cursor.node);
-        let resulting_literal_vectors = InMemoryNode::remove_nodes_sequentially_until(&later_cursor.node, Inclusivity::Exclusive, |node, _ct| {
-            let literal = InMemoryNode::literal(node);
 
-            let depth = InMemoryNode::depth(node);
-            if depth > earlier_node_depth {
-                // The node that was found was below `earlier_cursor.node` in the hierarchy, so
-                // keep going
-                NodeSeek::Continue(literal)
+        // 3. Delete all nodes starting at after the earlier node up to and including the later node
+        let mut reached_later_cursor_node = false;
+        let resulting_literal_vectors = InMemoryNode::remove_nodes_sequentially_until(&earlier_cursor.node, Inclusivity::Exclusive, |node, _ct| {
+            if !reached_later_cursor_node {
+                // 3. Delete all nodes starting at after the earlier node up to and including the later node
+                if node == &later_cursor.node {
+                    reached_later_cursor_node = true;
+                    NodeSeek::Continue(None)
+                } else {
+                    println!("DELETE: {} {:?}", InMemoryNode::depth(node), node.borrow().metadata);
+                    NodeSeek::Continue(None)
+                }
             } else {
-                // The node was at or above `earlier_cursor.node`, so bail out
-                NodeSeek::Stop
+                // 4. Keep going, storing literal text until back up at the same depth level as the
+                //    earlier node. Swap the earlier node with a new node containing literal text of all
+                //    the accumulated text.
+                let literal = InMemoryNode::literal(node);
+
+                let depth = InMemoryNode::depth(node);
+                println!("NODE: {} {:?}", depth, node.borrow().metadata);
+                if depth > earlier_node_depth {
+                    // The node that was found was below `earlier_cursor.node` in the hierarchy, so
+                    // keep going
+                    NodeSeek::Continue(Some(literal))
+                } else {
+                    // The node was at or above `earlier_cursor.node`, so bail out
+                    NodeSeek::Stop
+                }
             }
         });
 
+        println!("RESULT: {:?} {:?} {:?}", literal_suffix_to_keep, resulting_literal_vectors.clone().filter_map(|n| n).collect::<Vec<String>>(), literal_prefix_to_keep);
         let resulting_literal = format!(
             "{literal_suffix_to_keep}{}{literal_prefix_to_keep}",
-            resulting_literal_vectors.collect::<String>(),
+            resulting_literal_vectors.filter_map(|n| n).collect::<String>(),
         );
 
         // Swap the earlier node with a new node containing literal text of all
