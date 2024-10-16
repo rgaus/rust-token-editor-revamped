@@ -305,8 +305,9 @@ pub struct Selection<TokenKind: TokenKindTrait> {
 
 impl<TokenKind: TokenKindTrait> Debug for Selection<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let literal = self.literal_colors();
-        write!(f, "Selection(literal=\"{}\", len={}, primary={:?} secondary={:?})", literal, literal.len(), self.primary, self.secondary)
+        let literal_colors = self.literal_colors();
+        let literal_length = self.literal().len();
+        write!(f, "Selection(literal=\"{}\", len={}, primary={:?} secondary={:?})", literal_colors, literal_length, self.primary, self.secondary)
     }
 }
 
