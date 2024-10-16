@@ -352,7 +352,7 @@ pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<
                 level += 1;
             }
             WalkEvent::Leave(_) => {
-                let parent_upgraded = pointer.borrow().parent.clone().map(|n| n.upgrade());
+                let parent_upgraded = pointer.borrow().parent.as_ref().map(|n| n.upgrade());
                 if let Some(Some(parent)) = parent_upgraded {
                     pointer = parent;
                 }

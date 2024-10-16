@@ -955,7 +955,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         // duplicate pointer assignment in InMemoryNode::remove_child_at_index could probably
         // be saved
         for node in nodes {
-            let Some(Some(parent)) = node.borrow().parent.clone().map(|n| n.upgrade()) else {
+            let Some(Some(parent)) = node.borrow().parent.as_ref().map(|n| n.upgrade()) else {
                 continue;
             };
             let Some(child_index) = node.borrow().child_index else {
