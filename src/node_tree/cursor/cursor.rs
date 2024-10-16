@@ -323,6 +323,19 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         Self { secondary: cursor.clone(), primary: cursor }
     }
 
+    /// When called with a node, creates a new Selection that starts at the node and spans across
+    /// all of its children, ending at the end of the final child.
+    ///
+    /// ie: calling this function on the root node would select the entire token tree
+    pub fn new_across_subtree(node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
+        let deep_last_child = InMemoryNode::deep_last_child(node.clone()).unwrap_or(node.clone());
+        let deep_last_child_length = InMemoryNode::literal(&deep_last_child).len();
+        Self {
+            primary: Cursor::new(node.clone()),
+            secondary: Cursor::new_at(deep_last_child, deep_last_child_length),
+        }
+    }
+
     pub fn set_primary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
         self.primary = input.0;
         self
