@@ -324,7 +324,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     }
 
     pub fn set_primary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
-        self.secondary = input.0;
+        self.primary = input.0;
         self
     }
     pub fn set_secondary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
