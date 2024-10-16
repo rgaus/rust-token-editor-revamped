@@ -42,6 +42,9 @@ impl TokenKindTrait for SyntaxKind {
         if parent_kind == SyntaxKind::LITERAL && kind == SyntaxKind::STRING {
             return ColoredString::from(text).green();
         };
+        if parent_kind == SyntaxKind::LITERAL && kind == SyntaxKind::NUMBER {
+            return ColoredString::from(text).purple();
+        };
         if kind == SyntaxKind::COMMENT {
             return ColoredString::from(text).bright_black();
         };
