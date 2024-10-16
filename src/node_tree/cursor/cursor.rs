@@ -497,7 +497,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         });
 
         let resulting_literal = format!(
-            "{literal_prefix_to_keep}{}{literal_suffix_to_keep}",
+            "{literal_suffix_to_keep}{}{literal_prefix_to_keep}",
             resulting_literal_vectors.collect::<String>(),
         );
 
