@@ -537,36 +537,44 @@ fn main() {
 
     // rslint_example::main();
     println!("------ TWO ------");
-    let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
-      let foo = "brew";
-      function main() {
-          console.log("hello world");
-      }
+    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
+    //     }
 
-      function fizbuzz(n) {
-        if (n % 2 == 0) {
-            return "fizz";
-        } else if (n % 3 == 0) {
-            return "buzz";
-        } else {
-            return "fizzbuzz";
-        }
-      }
-    "#);
-    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
+    //     function fizbuzz(n) {
+    //         if (n % 2 == 0) {
+    //             return "fizz";
+    //         } else if (n % 3 == 0) {
+    //             return "buzz";
+    //         } else {
+    //             return "fizzbuzz";
+    //         }
+    //     }
+    // "#);
+    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
+    //     }
+    // "#);
+    let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
     InMemoryNode::dump(&root);
+    // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
 
     let mut selection = Cursor::new(root.clone()).selection();
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(13)));
-    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(30)));
+    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(8)));
     println!("PRE: {:?}\n", selection);
     selection.delete().unwrap();
-    // println!("POST: {:?}", Selection::new_across_subtree(&root));
+    println!("-------");
+    println!("POST: {:?}", Selection::new_across_subtree(&root));
     InMemoryNode::dump(&root);
 
-    // let mut selection = Cursor::new(root).selection();
-    // selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
-    // println!("RESULT: {:?}", selection);
+    let mut selection = Cursor::new(root).selection();
+    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    println!("RESULT: {:?}", selection);
 
     println!("------ END TWO ------");
     // println!("-------");

@@ -423,43 +423,64 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
 
     /// When called, deletes the character span referred to by the selection.
     pub fn delete(self: &Self) -> Result<(), String> {
+        // Find the earlier and later pointers out of self.primary and self.secondary
+        let earlier_cursor = &{
+            // NOTE: advance earlier_cursor forward, skipping empty nodes at the start of the selection
+            //
+            // This ensures that because there's always an empty node at the top of the token tree,
+            // that the full tree won't be deleted.
+            let mut earlier_cursor = if self.primary.node < self.secondary.node {
+                self.primary.clone()
+            } else {
+                self.secondary.clone()
+            };
+            while earlier_cursor.offset == 0 && InMemoryNode::literal(&earlier_cursor.node).is_empty() {
+                let Some(next) = earlier_cursor.node.borrow().next.as_ref().map(|n| n.upgrade()).flatten() else {
+                    break;
+                };
+                earlier_cursor = Cursor::new(next);
+            }
+            earlier_cursor
+        };
+        let later_cursor = if self.primary.node < self.secondary.node { &self.secondary } else { &self.primary };
+
+        // println!("earlier={:?} later={:?}", earlier_cursor.node.borrow().metadata, later_cursor.node.borrow().metadata);
+
         // If the node selection spans within a single node, then to delete that data, just update
         // the string literal value on the node
-        if self.primary.node == self.secondary.node {
-            let new_literal_start_offset = if self.primary.offset < self.secondary.offset {
-                self.primary.offset
+        if earlier_cursor.node == later_cursor.node {
+            let new_literal_start_offset = if earlier_cursor.offset < later_cursor.offset {
+                earlier_cursor.offset
             } else {
-                self.secondary.offset
+                later_cursor.offset
             };
 
             // Construct a string, taking all the characters before the selection and the
             // characters after the selection, and sticking them together (omitting the selection
             // chars)
-            let new_literal_length = self.secondary.offset.abs_diff(self.primary.offset);
+            let new_literal_length = later_cursor.offset.abs_diff(earlier_cursor.offset);
             let new_literal_prefix = InMemoryNode::literal_substring(
-                &self.primary.node,
+                &earlier_cursor.node,
                 0,
                 new_literal_start_offset,
             );
             let new_literal_suffix = InMemoryNode::literal_substring(
-                &self.primary.node,
+                &earlier_cursor.node,
                 new_literal_start_offset + new_literal_length,
-                InMemoryNode::literal(&self.primary.node).len() - new_literal_start_offset,
+                InMemoryNode::literal(&earlier_cursor.node).len() - new_literal_start_offset,
             );
             let new_literal = format!("{new_literal_prefix}{new_literal_suffix}");
 
             // NOTE: should all nodes under the parent be combined and reparsed if
             // new_literal.len() == 0?
-            InMemoryNode::set_literal(&self.primary.node, &new_literal);
+            InMemoryNode::set_literal(&earlier_cursor.node, &new_literal);
 
             return Ok(());
         };
 
         // If the node selection spans multiple nodes, then:
         //
-        // 1. Find the earlier node, and store the first part which should be kept
-        let earlier_cursor = if self.primary.node < self.secondary.node { &self.primary } else { &self.secondary };
-        let later_cursor = if self.primary.node < self.secondary.node { &self.secondary } else { &self.primary };
+        // 1. Find the earlier node (done above), and store the first part which should be kept
         let literal_prefix_to_keep = InMemoryNode::literal_substring(&earlier_cursor.node, 0, earlier_cursor.offset);
 
         // 2. Store the last part of the later node which should be kept
@@ -474,31 +495,29 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         // 3. Delete all nodes starting at after the earlier node up to and including the later node
         let mut reached_later_cursor_node = false;
         let resulting_literal_vectors = InMemoryNode::remove_nodes_sequentially_until(&earlier_cursor.node, Inclusivity::Exclusive, |node, _ct| {
+            // 3. Delete all nodes starting at after the earlier node up to and including the later node
+            if !reached_later_cursor_node && node == &later_cursor.node {
+                reached_later_cursor_node = true;
+            }
             if !reached_later_cursor_node {
-                // 3. Delete all nodes starting at after the earlier node up to and including the later node
-                if node == &later_cursor.node {
-                    reached_later_cursor_node = true;
-                    NodeSeek::Continue(None)
-                } else {
-                    println!("DELETE: {} {:?}", InMemoryNode::depth(node), node.borrow().metadata);
-                    NodeSeek::Continue(None)
-                }
-            } else {
-                // 4. Keep going, storing literal text until back up at the same depth level as the
-                //    earlier node. Swap the earlier node with a new node containing literal text of all
-                //    the accumulated text.
-                let literal = InMemoryNode::literal(node);
+                // println!("DELETE: {} {:?}", InMemoryNode::depth(node), node.borrow().metadata);
+                return NodeSeek::Continue(None);
+            }
 
-                let depth = InMemoryNode::depth(node);
-                println!("NODE: {} {:?}", depth, node.borrow().metadata);
-                if depth > earlier_node_depth {
-                    // The node that was found was below `earlier_cursor.node` in the hierarchy, so
-                    // keep going
-                    NodeSeek::Continue(Some(literal))
-                } else {
-                    // The node was at or above `earlier_cursor.node`, so bail out
-                    NodeSeek::Stop
-                }
+            // 4. Keep going, storing literal text until back up at the same depth level as the
+            //    earlier node. Swap the earlier node with a new node containing literal text of all
+            //    the accumulated text.
+            let literal = InMemoryNode::literal(node);
+
+            let depth = InMemoryNode::depth(node);
+            // println!("NODE: {} {:?}", depth, node.borrow().metadata);
+            if depth > earlier_node_depth {
+                // The node that was found was below `earlier_cursor.node` in the hierarchy, so
+                // keep going
+                NodeSeek::Continue(Some(literal))
+            } else {
+                // The node was at or above `earlier_cursor.node`, so bail out
+                NodeSeek::Stop
             }
         });
 
