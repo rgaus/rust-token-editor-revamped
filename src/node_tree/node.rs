@@ -317,6 +317,21 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
     }
 
+    /// When called, recurse through the entire subtree underneath the given node and generate the
+    /// literal text that represents that whole subtree.
+    ///
+    /// Note that this can be a bit expensive for very large subtrees.
+    pub fn deep_literal(node: &Rc<RefCell<Self>>) -> String {
+        let literal = InMemoryNode::literal(node);
+
+        if node.borrow().children.is_empty() {
+            return literal;
+        };
+
+        let child_literals = node.borrow().children.iter().map(|node| Self::deep_literal(node)).collect::<String>();
+        format!("{literal}{child_literals}")
+    }
+
     pub fn literal_colored(node: &Rc<RefCell<Self>>, literal: &str) -> ColoredString {
         let ancestry = {
             let mut ancestry = vec![];
@@ -389,6 +404,56 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         }
 
         depth
+    }
+
+    /// When called, reparses the child at the given index with tke parser associated with each
+    /// token in the token tree.
+    ///
+    /// Returns the head of the newly reparsed subtree, or an error.
+    pub fn reparse_child_at_index(parent: Rc<RefCell<Self>>, index: usize) -> Result<Rc<RefCell<Self>>, String> {
+        println!("REPARSE_CHILD_AT_INDEX: parent={:?} index={index}", parent.borrow().metadata);
+        let mut reparsable_pointer = parent.clone();
+        let mut reparsable_pointer_child_index = index;
+
+        // 1. Find the next parsable node walking up the node tree
+        while match &reparsable_pointer.borrow().metadata {
+            NodeMetadata::AstNode{ kind, .. } => !TokenKind::is_reparsable(&kind),
+            _ => false, // NOTE: consider any non ast node containing nodes as not parsable.
+        } {
+            let (Some(child_index), Some(parent)) = (
+                reparsable_pointer.borrow().child_index,
+                reparsable_pointer.borrow().parent.as_ref().map(|n| n.upgrade()).flatten(),
+            ) else {
+                // Hmm, we've reached the top of the node tree and no nodes are parsable. In this
+                // case, the whole doeument needs to be reparsed! :(
+                continue;
+            };
+            reparsable_pointer_child_index = child_index;
+            reparsable_pointer = parent;
+        }
+        // println!("FOUND NEW: {:?} {}", reparsable_pointer.borrow().metadata, reparsable_pointer_child_index);
+
+        // 2. Once a reparsable node has been found, get its contents to reparse ...
+        let child_deep_literal = {
+            let borrowed_parent = reparsable_pointer.borrow();
+            let Some(child) = borrowed_parent.children.get(reparsable_pointer_child_index) else {
+                return Err(format!("InMemoryNode::reparse_child_at_index: No child node found at index {reparsable_pointer_child_index} in parent {:?} (originally {index} in parent {:?})", reparsable_pointer.borrow().metadata, parent.borrow().metadata));
+            };
+
+            Self::deep_literal(&child)
+        };
+
+        // println!("DEEP LITERAL: {child_deep_literal:?}");
+
+        // 3. ... and then reparse it!
+        let new_child = TokenKind::parse(&child_deep_literal, Some(reparsable_pointer.clone()));
+
+        // 4. Swap out the existing literal node being reparsed with the newly
+        // parser-generated token subtree
+        match Self::swap_child_at_index(&reparsable_pointer, index, new_child.clone()) {
+            Ok(()) => Ok(new_child),
+            Err(err) => Err(err),
+        }
     }
 
     /// When called, adds the given `child` to the `parent` at the beginning of its children Vec.
@@ -721,7 +786,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         parent: &Rc<RefCell<Self>>,
         index: usize,
         new_child: Rc<RefCell<Self>>,
-    ) {
+    ) -> Result<(), String> {
         println!(
             "SWAP: {:?} INDEX: {} NEW: {:?}",
             parent.borrow().metadata,
@@ -733,7 +798,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             let parent = parent.borrow();
             let old_child = parent.children.get(index);
             let Some(old_child) = old_child else {
-                return;
+                return Err(format!("InMemoryNode::swap_child_at_index: No child node found at index {} in parent {:?}", index, parent));
             };
 
             let previous_child = old_child
@@ -823,6 +888,8 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             (*parent_mut).children.remove(index);
             (*parent_mut).children.insert(index, new_child);
         }
+
+        Ok(())
     }
 
     pub fn seek_until<UntilFn, ResultItem>(
