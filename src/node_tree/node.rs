@@ -82,7 +82,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
     }
     pub fn new_from_parsed(literal: &str) -> Rc<RefCell<Self>> {
-        TokenKind::parse(literal, None)
+        let subtree_root = TokenKind::parse(literal, None);
+        let root = Self::new_empty();
+        InMemoryNode::append_child(&root, subtree_root);
+        root
     }
     pub fn new_with_metadata(metadata: NodeMetadata<TokenKind>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
