@@ -48,6 +48,7 @@ pub trait TokenKindTrait: Clone + Debug + PartialEq {
 pub enum NodeMetadata<TokenKind: TokenKindTrait> {
     Empty,
     Literal(String),
+    Root,
     AstNode { kind: TokenKind, literal: Option<String> },
     Whitespace(String),
 }
@@ -57,6 +58,7 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
         match self {
             Self::Empty => write!(f, "EMPTY"),
             Self::Literal(text) => write!(f, "LITERAL({text})"),
+            Self::Root => write!(f, "ROOT"),
             Self::Whitespace(text) => write!(f, "WHITESPACE({text})"),
             Self::AstNode{ kind, literal: None } => write!(f, "{}{}", "AST:".bright_black(), format!("{:?}", kind).bold().cyan()),
             Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.on_bright_black()),
@@ -90,12 +92,15 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn new_empty() -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Empty)
     }
+    pub fn new_root() -> Rc<RefCell<Self>> {
+        Self::new_with_metadata(NodeMetadata::Root)
+    }
     pub fn new_from_literal(literal: &str) -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
     }
     pub fn new_from_parsed(literal: &str) -> Rc<RefCell<Self>> {
         let subtree_root = TokenKind::parse(literal, None);
-        let root = Self::new_empty();
+        let root = Self::new_root();
         InMemoryNode::append_child(&root, subtree_root);
         root
     }
@@ -117,7 +122,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// nodes all under a common parent. Each node contains an `chars_per_node` characters except
     /// for the final one, which may contain less if literal.len() % chars_per_node != 0
     pub fn new_tree_from_literal_in_chunks(literal: &str, chars_per_node: usize) -> Rc<RefCell<Self>> {
-        let parent = Self::new_empty();
+        let parent = Self::new_root();
         let literal: String = literal.into();
 
         let literal_char_vector = literal.chars().collect::<Vec<char>>();
