@@ -352,6 +352,10 @@ impl TokenKindTrait for SyntaxKind {
         }
     }
 
+    fn is_reparsable(&self) -> bool {
+        matches!(self, SyntaxKind::SCRIPT | SyntaxKind::EXPR_STMT)
+    }
+
     fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>> {
         let parse = parse_text(literal, 0);
         // The untyped syntax node of `foo.bar[2]`, the root node is `Script`.

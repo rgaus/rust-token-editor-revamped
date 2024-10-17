@@ -28,6 +28,18 @@ pub trait TokenKindTrait: Clone + Debug + PartialEq {
     /// terminal to properly apply syntax highlighting.
     fn apply_debug_syntax_color(text: String, token_kind_ancestry: std::vec::IntoIter<Self>) -> ColoredString;
 
+    /// When called, should return whether this token is reparsable.
+    ///
+    /// This is used when performing tree reparses to figure out at what level the reparse needs to
+    /// occur. ie - the parser probably will only parse fully formed expressions, so in that case,
+    /// this function would check to see if `self` represents a node that is a fully formed
+    /// expression!
+    ///
+    /// If the parser being used has no such limitations (ie, any node can be reparsed), then this
+    /// function should always return true. If this function always returns false, then the whole
+    /// document will always be reparsed (very unperformant, but could sometimes be desired),
+    fn is_reparsable(&self) -> bool;
+
     /// When called, parse the literal specified, returning a new token subtree
     fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>>;
 }
