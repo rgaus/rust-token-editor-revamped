@@ -363,14 +363,44 @@ impl TokenKindTrait for SyntaxKind {
 
         let root = convert_rslint_syntaxnode_to_inmemorynode(untyped_expr_node);
 
-        // Set the parent on the newly parsed node
-        root.borrow_mut().parent = if let Some(parent) = parent {
-            Some(Rc::downgrade(&parent))
-        } else {
-            None
-        };
+        // If the parsed result output has within it only one node, then extract just the node that
+        // was previously the parent to minimize the number of output nodes in the resulting tree
+        //
+        // However, only traverse down while AST nodes have a single child so that any omitted
+        // nodes won't change the literal text contents of the result. ie, in the below, only go
+        // down as far as C before bailing out early:
+        // - A
+        //   - B
+        //     - C
+        //       - D
+        //       - E
+        //       - F
+        if let Some(NodeMetadata::AstNode { kind: parent_kind, .. }) = parent.as_ref().map(|n| n.borrow().metadata.clone()) {
+            let mut pointer = root.clone();
+            while {
+                if pointer.borrow().children.len() != 1 {
+                    false
+                } else if let NodeMetadata::AstNode { kind, .. } = pointer.borrow().metadata {
+                    kind != parent_kind
+                } else {
+                    false
+                }
+            } {
+                let Some(first_child) = pointer.borrow().first_child.as_ref().map(|n| n.upgrade()).flatten() else {
+                    // Traversal downwards is no longer possible, but a matching AstNode kind has
+                    // not been found.
+                    //
+                    // So, bail out of this optimization, and just return root. The newly generated
+                    // AST is signifigantly enough different where this path is not viable.
+                    return root;
+                };
+                pointer = first_child;
+            }
 
-        root
+            pointer
+        } else {
+            root
+        }
     }
 }
 
