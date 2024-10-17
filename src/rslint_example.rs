@@ -363,7 +363,13 @@ pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<
     }
     assert_eq!(level, 0);
 
-    root
+    // An optimization: if the generated token tree's root only has a single node within it (should
+    // always be the case, just a SCRIPT node), then return that and ditch the EMPTY wrapper
+    if root.borrow().children.len() == 1 {
+        root.borrow().children.first().unwrap().to_owned()
+    } else {
+        root
+    }
 }
 
 pub fn main() {
