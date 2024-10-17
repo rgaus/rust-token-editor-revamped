@@ -826,7 +826,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             }
 
             // Step N: Relink the old_child.next's previous to point to new_child.deep_last_child
-            if let Some(new_child_deep_last_child) = new_child_deep_last_child {
+            if let Some(new_child_deep_last_child) = new_child_deep_last_child.clone() {
                 (*new_child_deep_last_child.borrow_mut()).next = old_child_deep_last_child
                     .clone()
                     .map(|n| n.borrow().next.clone())
@@ -841,15 +841,16 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             }
 
             // Step N: Update new_child.next to be old_child.deep_last_child.next
-            (*new_child_mut).next = if let Some(deep_last_child) = old_child_deep_last_child.clone()
-            {
-                deep_last_child.borrow().next.clone()
-            } else {
-                old_child.borrow().next.clone()
-            };
+            if new_child_mut.next.is_none() {
+                (*new_child_mut).next = if let Some(deep_last_child) = old_child_deep_last_child.clone() {
+                    deep_last_child.borrow().next.clone()
+                } else {
+                    old_child.borrow().next.clone()
+                };
+            }
 
             // Step N: Update the next sibling of old_child to point back to it
-            //         ie, old_child.(OLD) deep_last_child,next.previous to new_child
+            //         ie, old_child.(OLD) deep_last_child,next.previous to new_child (or its deep last child if it has children)
             if let Some(deep_last_child_next) = old_child_deep_last_child
                 .clone()
                 .map(|n| n.borrow().next.clone())
@@ -857,7 +858,9 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 .map(|n| n.upgrade())
                 .flatten()
             {
-                (*deep_last_child_next.borrow_mut()).previous = Some(Rc::downgrade(&new_child));
+                (*deep_last_child_next.borrow_mut()).previous = Some(
+                    Rc::downgrade(&new_child_deep_last_child.unwrap_or(new_child.clone()))
+                );
             } else if let Some(old_child_next) = old_child
                 .borrow()
                 .next
