@@ -422,7 +422,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     }
 
     /// When called, deletes the character span referred to by the selection.
-    pub fn delete(self: &Self) -> Result<(), String> {
+    pub fn delete_internal(self: &Self, perform_reparse: bool) -> Result<(), String> {
         // Find the earlier and later pointers out of self.primary and self.secondary
         let earlier_cursor = &{
             // NOTE: advance earlier_cursor forward, skipping empty nodes at the start of the selection
@@ -533,8 +533,33 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         InMemoryNode::remove_all_children(&earlier_cursor.node);
 
         // 5. Reparse the newly created literal text node
-        // TODO
+        // NOTE: consider making this an async job that can run when free cycles are available
+        if perform_reparse {
+            let child = earlier_cursor.node.borrow();
+            if let (
+                Some(Some(parent)),
+                Some(child_index),
+            ) = (child.parent.as_ref().map(|n| n.upgrade()), child.child_index) {
+                InMemoryNode::reparse_child_at_index(parent, child_index)?;
+            } else {
+                // The node that needs to be reparsed doesn't have a parent!
+                //
+                // This should be impossible, since the ROOT node at the top of the document has no
+                // length, and should therefore never be part of a selection
+                unreachable!("Selection::delete: tried to reparse a node that has no parent ({:?}), this is impossible!", child.metadata);
+            }
+        }
 
         Ok(())
+    }
+
+    /// When called, deletes the character span referred to by the selection, and reparses the
+    /// result
+    pub fn delete(&self) -> Result<(), String> {
+        self.delete_internal(true)
+    }
+    /// When called, deletes the character span referred to by the selection. NO REPARSE OCCURS.
+    pub fn delete_raw(&self) -> Result<(), String> {
+        self.delete_internal(false)
     }
 }
