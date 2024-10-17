@@ -476,34 +476,36 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             //         a. parent.(OLD) last_child.deep_last_child.next (if the old last_child has
             //                                                          children of its own)
             //         b. parent.(OLD) last_child.next
-            (*child_mut).next = if parent.borrow().first_child.is_none() {
-                parent.borrow().next.clone() // a
-            } else {
-                parent
-                    .borrow()
-                    .last_child
-                    .clone()
-                    .map(|last_child| last_child.upgrade())
-                    .flatten()
-                    .map(|last_child| {
-                        if let Some(deep_last_child) = Self::deep_last_child(last_child.clone()) {
-                            deep_last_child.borrow().next.clone() // c
-                        } else {
-                            last_child.borrow().next.clone() // b
-                        }
-                    })
-                    .flatten()
-            };
-            println!(
-                "a. {:?}.next = {:?}",
-                child_mut.metadata,
-                child_mut
-                    .next
-                    .clone()
-                    .map(|n| n.upgrade())
-                    .flatten()
-                    .map(|n| n.borrow().metadata.clone())
-            );
+            if child_mut.next.is_none() {
+                (*child_mut).next = if parent.borrow().first_child.is_none() {
+                    parent.borrow().next.clone() // a
+                } else {
+                    parent
+                        .borrow()
+                        .last_child
+                        .clone()
+                        .map(|last_child| last_child.upgrade())
+                        .flatten()
+                        .map(|last_child| {
+                            if let Some(deep_last_child) = Self::deep_last_child(last_child.clone()) {
+                                deep_last_child.borrow().next.clone() // c
+                            } else {
+                                last_child.borrow().next.clone() // b
+                            }
+                        })
+                        .flatten()
+                };
+                println!(
+                    "a. {:?}.next = {:?}",
+                    child_mut.metadata,
+                    child_mut
+                        .next
+                        .clone()
+                        .map(|n| n.upgrade())
+                        .flatten()
+                        .map(|n| n.borrow().metadata.clone())
+                );
+            }
 
             // Step N: make the new child's previous either:
             //         a. parent.(OLD) last_child.deep_last_child (if the old last_child has
