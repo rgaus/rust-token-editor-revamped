@@ -8,7 +8,7 @@ use crate::node_tree::{
     utils::{Direction, Inclusivity},
     fractional_index::VariableSizeFractionalIndex,
 };
-use colored::{Colorize, ColoredString};
+use colored::{Colorize, ColoredString, CustomColor};
 use std::{
     cell::{RefCell, RefMut},
     rc::{Rc, Weak}, fmt::Debug,
@@ -61,7 +61,7 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
             Self::Root => write!(f, "ROOT"),
             Self::Whitespace(text) => write!(f, "WHITESPACE({text})"),
             Self::AstNode{ kind, literal: None } => write!(f, "{}{}", "AST:".bright_black(), format!("{:?}", kind).bold().cyan()),
-            Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.on_bright_black()),
+            Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.replace("\n", "\\n").on_bright_black()),
         }
     }
 }
@@ -136,6 +136,11 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         parent
     }
 
+    /// When called, dumps out a representation of the given token and its whole subtree
+    /// underneath, validating all links (next, previous, first_child, last_child, etc) to ensure
+    /// they are correct.
+    ///
+    /// This is a debugging tool and not meant to be used in actual editor operation.
     pub fn dump(node: &Rc<RefCell<Self>>) {
         Self::dump_child(node, "", None);
     }
@@ -212,8 +217,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             // TODO
             let previous_set_correctly = validate_node_previous(wrapped_node);
 
-            let flags = format!(
-                "{} {} {} {} {}",
+            let flags = vec![
                 if let Some(result) = node_was_found_at_expected_index_in_parent {
                     format!(
                         "parent?={}",
@@ -264,14 +268,15 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                         reason => format!("{reason:?}").on_red(),
                     }
                 ),
-            );
+            ];
 
-            flags
+            flags.into_iter().fold("".into(), |acc, n| if n.len() > 0 { format!("{acc} {n}") } else { acc })
         };
 
         println!(
             "{spacer}{}. metadata={:?} next={:?} prev={:?}\t\t{}",
-            node.child_index.or(Some(0)).unwrap(),
+            // node.child_index.or(Some(0)).unwrap(),
+            node.index,
             // if let Some(index) = parent_expected_index_within_children {
             //     format!("{index}")
             // } else {
@@ -294,7 +299,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         if node.metadata == NodeMetadata::Empty && node.children.is_empty() {
             println!("{spacer}  (no children)")
         } else {
-            let new_spacer = &format!("{spacer}  ");
+            let new_spacer = &format!("{spacer}{} ", "|".custom_color(CustomColor { r: 40, g: 40, b: 40 }));
             let mut counter = 0;
             for child in &node.children {
                 Self::dump_child(child, new_spacer, Some(counter));

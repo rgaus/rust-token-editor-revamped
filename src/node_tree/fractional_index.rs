@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Debug};
 
 fn get_midpoint_u8(smaller: u8, larger: u8) -> u8 {
     if smaller == larger || smaller+1 == larger {
@@ -60,10 +60,21 @@ impl FractionalIndex {
 }
 
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+#[derive(Clone, PartialEq, Eq, Ord)]
 pub struct VariableSizeFractionalIndex(Vec<u8>);
 
 impl Display for VariableSizeFractionalIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // let places = u8::MAX.checked_ilog(8).unwrap();
+        let entries = self.0.iter()
+            .map(|entry| format!("{}", entry))
+            .collect::<Vec<String>>()
+            .join(",");
+        write!(f, "{entries}")
+    }
+}
+
+impl Debug for VariableSizeFractionalIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let places = u8::MAX.checked_ilog(8).unwrap();
         let entries = self.0.iter()
