@@ -49,8 +49,8 @@ pub enum NodeMetadata<TokenKind: TokenKindTrait> {
     Empty,
     Literal(String),
     Root,
+    Fragment,
     AstNode { kind: TokenKind, literal: Option<String> },
-    Whitespace(String),
 }
 
 impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
@@ -59,7 +59,7 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
             Self::Empty => write!(f, "EMPTY"),
             Self::Literal(text) => write!(f, "LITERAL({text})"),
             Self::Root => write!(f, "ROOT"),
-            Self::Whitespace(text) => write!(f, "WHITESPACE({text})"),
+            Self::Fragment => write!(f, "FRAGMENT"),
             Self::AstNode{ kind, literal: None } => write!(f, "{}{}", "AST:".bright_black(), format!("{:?}", kind).bold().cyan()),
             Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.replace("\n", "\\n").on_bright_black()),
         }
@@ -94,6 +94,9 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     }
     pub fn new_root() -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Root)
+    }
+    pub fn new_fragment() -> Rc<RefCell<Self>> {
+        Self::new_with_metadata(NodeMetadata::Fragment)
     }
     pub fn new_from_literal(literal: &str) -> Rc<RefCell<Self>> {
         Self::new_with_metadata(NodeMetadata::Literal(literal.into()))
@@ -319,7 +322,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         Self::literal(node).chars().skip(start).take(length).collect::<String>()
     }
     pub fn set_literal(node: &Rc<RefCell<Self>>, new_literal: &str) {
-        (*node.borrow_mut()).metadata = NodeMetadata::Literal(new_literal.into());
+        Self::set_metadata(node, NodeMetadata::Literal(new_literal.into()));
+    }
+    pub fn set_metadata(node: &Rc<RefCell<Self>>, new_metadata: NodeMetadata<TokenKind>) {
+        (*node.borrow_mut()).metadata = new_metadata;
     }
 
     /// When called, recurse through the entire subtree underneath the given node and generate the
@@ -703,10 +709,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         child
     }
 
-    /// Removes a child node from a tree. Returns the parent node of the removed node, or None if
-    /// the node that was removed was at the top level.
+    /// Removes a child node from a tree, including the subtree under the child node. Returns the
+    /// parent node of the removed node, or None if the node that was removed was at the top level.
     pub fn remove_child_at_index(parent: &Rc<RefCell<Self>>, index: usize) {
-        println!("REMOVE: {:?} INDEX: {:?}", parent.borrow().metadata, index);
+        // println!("REMOVE: {:?} INDEX: {:?}", parent.borrow().metadata, index);
         let (child, previous_child, deep_last_child) = {
             let parent = parent.borrow();
             let child = parent.children.get(index);
@@ -1030,6 +1036,9 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// Given a starting node `start_node`, delete from that node the the next node and onwards,
     /// as long as the `until_fn` predicate function passes. if `start_node_included` is
     /// Inclusivity::Exclusive, begin iterating AFTER the start_node rather than right at it.
+    ///
+    /// Note that when a node is deleted, its children will not be! They will need to individually
+    /// be checked.
     pub fn remove_nodes_sequentially_until<UntilFn, ResultItem>(
         start_node: &Rc<RefCell<Self>>,
         start_node_included: Inclusivity,
@@ -1058,7 +1067,31 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             let Some(child_index) = node.borrow().child_index else {
                 continue;
             };
-            InMemoryNode::remove_child_at_index(&parent, child_index);
+
+            // NOTE: it's important to only delete the given node, and not accidentally delete its
+            // children! So, if the node has no children...
+            if node.borrow().children.is_empty() {
+                // Then delete it.
+                InMemoryNode::remove_child_at_index(&parent, child_index);
+
+                // If the parent of the child that was just deleted now has zero children...
+                if parent.borrow().children.is_empty() {
+                    if let (
+                        Some(Some(parent_of_parent)),
+                        Some(parent_child_index),
+                    ) = (
+                        parent.borrow().parent.as_ref().map(|n| n.upgrade()),
+                        parent.borrow().child_index,
+                    ) {
+                        // Then delete the parent
+                        InMemoryNode::remove_child_at_index(&parent_of_parent, parent_child_index);
+                    }
+                }
+            } else {
+                // If the node has children, then turn it into a Fragment. A Fragment has no
+                // literal contents itself so it in effect "deletes" the node.
+                InMemoryNode::set_metadata(&node, NodeMetadata::Fragment);
+            }
         }
 
         values.into_iter()
