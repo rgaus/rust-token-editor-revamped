@@ -422,7 +422,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     }
 
     /// When called, deletes the character span referred to by the selection.
-    pub fn delete_internal(self: &Self, perform_reparse: bool) -> Result<(), String> {
+    fn splice(self: &Self, new_literal: Option<String>, perform_reparse: bool) -> Result<(), String> {
         // Find the earlier and later pointers out of self.primary and self.secondary
         let earlier_cursor = &{
             // NOTE: advance earlier_cursor forward, skipping empty nodes at the start of the selection
@@ -469,7 +469,14 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 new_literal_start_offset + new_literal_length,
                 InMemoryNode::literal(&earlier_cursor.node).len() - new_literal_start_offset,
             );
-            let new_literal = format!("{new_literal_prefix}{new_literal_suffix}");
+            let new_literal = format!(
+                "{new_literal_prefix}{}{new_literal_suffix}",
+                if let Some(new_literal) = new_literal {
+                    new_literal
+                } else {
+                    "".into()
+                },
+            );
 
             // NOTE: should all nodes under the parent be combined and reparsed if
             // new_literal.len() == 0?
@@ -523,7 +530,12 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
 
         println!("RESULT: {:?} {:?} {:?}", literal_suffix_to_keep, resulting_literal_vectors.clone().filter_map(|n| n).collect::<Vec<String>>(), literal_prefix_to_keep);
         let resulting_literal = format!(
-            "{literal_suffix_to_keep}{}{literal_prefix_to_keep}",
+            "{literal_prefix_to_keep}{}{}{literal_suffix_to_keep}",
+            if let Some(new_literal) = new_literal {
+                new_literal
+            } else {
+                "".into()
+            },
             resulting_literal_vectors.filter_map(|n| n).collect::<String>(),
         );
 
@@ -556,10 +568,21 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     /// When called, deletes the character span referred to by the selection, and reparses the
     /// result
     pub fn delete(&self) -> Result<(), String> {
-        self.delete_internal(true)
+        self.splice(None, true)
     }
     /// When called, deletes the character span referred to by the selection. NO REPARSE OCCURS.
     pub fn delete_raw(&self) -> Result<(), String> {
-        self.delete_internal(false)
+        self.splice(None, false)
+    }
+
+    /// When called, replaces the character span referred to by the selection with the given
+    /// literal, and reparses the result
+    pub fn replace(&self, literal: &str) -> Result<(), String> {
+        self.splice(Some(literal.into()), true)
+    }
+    /// When called, replaces the character span referred to by the selection with the given
+    /// literal. NO REPARSE OCCURS.
+    pub fn replace_raw(&self, literal: &str) -> Result<(), String> {
+        self.splice(Some(literal.into()), false)
     }
 }
