@@ -449,6 +449,11 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         // If the node selection spans within a single node, then to delete that data, just update
         // the string literal value on the node
         if earlier_cursor.node == later_cursor.node {
+            if earlier_cursor.offset == later_cursor.offset {
+                // A zero length selection - do nothing!
+                return Ok(());
+            };
+
             let new_literal_start_offset = if earlier_cursor.offset < later_cursor.offset {
                 earlier_cursor.offset
             } else {
