@@ -1,4 +1,4 @@
-use std::fmt::{Display, Debug};
+use std::{fmt::{Display, Debug}, collections::VecDeque, iter::zip};
 
 fn get_midpoint_u8(smaller: u8, larger: u8) -> u8 {
     if smaller == larger || smaller+1 == larger {
@@ -39,6 +39,9 @@ impl FractionalIndex {
     pub fn end() -> Self {
         Self(usize::MAX)
     }
+    pub fn of(n: usize) -> Self {
+        Self(n)
+    }
 
     pub fn generate(previous: Self, next: Self) -> Self {
         let new_value = (previous.0 / 2) + (next.0 / 2);
@@ -55,6 +58,46 @@ impl FractionalIndex {
             (None, Some(next)) => Self::generate(Self::start(), next),
             (Some(previous), None) => Self::generate(previous, Self::end()),
             (Some(previous), Some(next)) => Self::generate(previous, next),
+        }
+    }
+
+    /// Generates a roughly equally distributed sequence of `sequence_length` indexes
+    /// between `start` and `end`.
+    ///
+    /// This is "roughly equally distributed" because the index is backed by a usize, which means
+    /// rounding may result in off by one errors in spacings.
+    ///
+    /// Note that the output sequence does not include `start` or `end`, just the in between values.
+    pub fn distributed_sequence(start: &Self, end: &Self, sequence_length: usize) -> impl std::iter::Iterator<Item = Self> {
+        if sequence_length == 0 {
+            return vec![].into_iter();
+        };
+
+        let multiplier = (end.0 - start.0) / sequence_length;
+
+        let result = (0..sequence_length).map(|index| {
+            Self::of(start.0 + (index * multiplier))
+        });
+
+        for (a, b) in zip(result.clone(), result.clone().skip(1)) {
+            assert_ne!(a, b, "FractionalIndex::distributed_sequence: ran out of precision to represent new entry!");
+        }
+
+        result.collect::<Vec<Self>>().into_iter()
+    }
+
+    /// Given node values for a next and previous that may or may not exist, generate a midpoint
+    /// node value to assign to a node in this new position.
+    pub fn distributed_sequence_or_fallback(
+        start: Option<Self>,
+        end: Option<Self>,
+        sequence_length: usize,
+    ) -> impl std::iter::Iterator<Item = Self> {
+        match (start, end) {
+            (None, None) => Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length),
+            (None, Some(end)) => Self::distributed_sequence(&Self::start(), &end, sequence_length),
+            (Some(start), None) => Self::distributed_sequence(&start, &Self::end(), sequence_length),
+            (Some(start), Some(end)) => Self::distributed_sequence(&start, &end, sequence_length),
         }
     }
 }
@@ -161,6 +204,56 @@ impl VariableSizeFractionalIndex {
             (None, Some(next)) => Self::generate(&Self::start(), &next),
             (Some(previous), None) => Self::generate(&previous, &Self::end()),
             (Some(previous), Some(next)) => Self::generate(&previous, &next),
+        }
+    }
+
+    /// Generates a roughly equally distributed sequence of `sequence_length` indexes
+    /// between `start` and `end`.
+    ///
+    /// This is "roughly equally distributed" because it is implemented in a binary search type
+    /// fashion, where each division between existing nodes is divided repeatedly to acheive the
+    /// output. This means some nodes may be further apart because a division between them was not
+    /// required to get to the reqested sequence length.
+    ///
+    /// Note that the output sequence does not include `start` or `end`, just the in between values.
+    pub fn distributed_sequence(start: &Self, end: &Self, sequence_length: usize) -> impl std::iter::Iterator<Item = Self> {
+        let mut sequence = VecDeque::from(vec![start.clone(), end.clone()]);
+        while sequence.len() < sequence_length {
+
+            // Generate a new element between each existing element
+            let mut start_index = 0;
+            let mut end_index = 1;
+            while end_index < sequence.len() {
+                // println!("{}, {}", start_index, end_index);
+                let start = &sequence[start_index];
+                let end = &sequence[end_index];
+                let midpoint = Self::generate(start, end);
+                sequence.insert(start_index+1, midpoint);
+                start_index += 2 /* each element of pair */ + 1 /* newly added element */;
+                end_index += 2 /* each element of pair */ + 1 /* newly added element */;
+            }
+            // println!("SEQ: {:?}", sequence);
+        }
+
+        // Remove the original start and end elements
+        sequence.pop_front();
+        sequence.pop_back();
+
+        sequence.into_iter()
+    }
+
+    /// Given node values for a next and previous that may or may not exist, generate a midpoint
+    /// node value to assign to a node in this new position.
+    pub fn distributed_sequence_or_fallback(
+        start: Option<Self>,
+        end: Option<Self>,
+        sequence_length: usize,
+    ) -> impl std::iter::Iterator<Item = Self> {
+        match (start, end) {
+            (None, None) => Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length),
+            (None, Some(end)) => Self::distributed_sequence(&Self::start(), &end, sequence_length),
+            (Some(start), None) => Self::distributed_sequence(&start, &Self::end(), sequence_length),
+            (Some(start), Some(end)) => Self::distributed_sequence(&start, &end, sequence_length),
         }
     }
 }
