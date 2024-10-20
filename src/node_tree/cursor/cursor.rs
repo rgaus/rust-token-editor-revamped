@@ -496,7 +496,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         let literal_prefix_to_keep = InMemoryNode::literal_substring(&earlier_cursor.node, 0, earlier_cursor.offset);
 
         // 2. Store the last part of the later node which should be kept
-        let literal_suffix_to_keep = InMemoryNode::literal_substring(
+        let later_cursor_substring_outside_selection = InMemoryNode::literal_substring(
             &later_cursor.node,
             later_cursor.offset,
             InMemoryNode::literal(&later_cursor.node).len() - later_cursor.offset,
@@ -516,6 +516,15 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 return NodeSeek::Continue(None);
             }
 
+            if node == &later_cursor.node {
+                // The node that was found was `later_cursor.node`, so use the part of the
+                // later node that is outside the selection.
+                //
+                // This is where the loop transitions from "deleting stuff in the selection" to
+                // "collecting stuff after the selection into a literal"
+                return NodeSeek::Continue(Some(later_cursor_substring_outside_selection.clone()));
+            };
+
             // 4. Keep going, storing literal text until back up at the same depth level as the
             //    earlier node. Swap the earlier node with a new node containing literal text of all
             //    the accumulated text.
@@ -529,19 +538,19 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 NodeSeek::Continue(Some(literal))
             } else {
                 // The node was at or above `earlier_cursor.node`, so bail out
-                NodeSeek::Done(None)
+                NodeSeek::Done(Some(literal))
             }
         });
 
-        println!("RESULT: {:?} {:?} {:?}", literal_suffix_to_keep, resulting_literal_vectors.clone().filter_map(|n| n).collect::<Vec<String>>(), literal_prefix_to_keep);
+        let collected = resulting_literal_vectors.filter_map(|n| n).collect::<String>();
+        // println!("RESULT: {:?} {:?} {:?}", literal_prefix_to_keep, collected, later_cursor_substring_outside_selection);
         let resulting_literal = format!(
-            "{literal_prefix_to_keep}{}{}{literal_suffix_to_keep}",
+            "{literal_prefix_to_keep}{}{collected}",
             if let Some(new_literal) = new_literal {
                 new_literal
             } else {
                 "".into()
             },
-            resulting_literal_vectors.filter_map(|n| n).collect::<String>(),
         );
 
         // Swap the earlier node with a new node containing literal text of all
