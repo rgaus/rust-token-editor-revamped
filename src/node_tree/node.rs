@@ -369,22 +369,55 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// index.
     // fn recompute_index(node: &Rc<RefCell<Self>>) {
     fn assign_index(mut node_mut: RefMut<'_, Self>) {
-        let first = node_mut.previous.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
-        let second = node_mut.next.clone().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
+        let first = node_mut.previous.as_ref().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
+        let second = node_mut.next.as_ref().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
         let new_index = VariableSizeFractionalIndex::generate_or_fallback(first, second);
         (*node_mut).index = new_index;
+    }
+
+    fn reassign_subtree_indexes(node: &Rc<RefCell<Self>>) {
+        let before_index = node
+            .borrow()
+            .previous
+            .as_ref()
+            .map(|n| n.upgrade()).flatten()
+            .map(|n| n.borrow().index.clone());
+        let after_index = Self::deep_last_child(node)
+            .unwrap_or_else(|| node.clone())
+            .borrow()
+            .next
+            .as_ref()
+            .map(|n| n.upgrade()).flatten()
+            .map(|n| n.borrow().index.clone());
+
+        let mut cursor = node.clone();
+        let number_of_nodes = 1 /* the passed node */ + Self::deep_children_length(node);
+        // println!("GENERATE: {:?} .. {:?} {}", before_index, after_index, number_of_nodes);
+        for index in VariableSizeFractionalIndex::distributed_sequence_or_fallback(
+            before_index,
+            after_index,
+            number_of_nodes,
+        ) {
+            // println!("ASSIGN: {:?} = {:?}", cursor.borrow().metadata, index);
+            (*cursor.borrow_mut()).index = index;
+
+            let Some(next) = cursor.borrow().next.as_ref().map(|n| n.upgrade()).flatten() else {
+                break;
+            };
+            cursor = next;
+        }
     }
 
     /// Given a node, gets its "deep last child" - ie, the last child of the last child
     /// of the ... etc
     ///
     /// This is an important value when doing certain relinking operations.
-    pub fn deep_last_child(node: Rc<RefCell<Self>>) -> Option<Rc<RefCell<Self>>> {
+    pub fn deep_last_child(node: &Rc<RefCell<Self>>) -> Option<Rc<RefCell<Self>>> {
         if node.borrow().last_child.is_none() {
             return None;
         };
 
-        let mut cursor = node;
+        let mut cursor = node.clone();
         loop {
             let Some(last_child) = cursor.borrow().last_child.clone() else {
                 break;
@@ -580,7 +613,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                         .map(|last_child| last_child.upgrade())
                         .flatten()
                         .map(|last_child| {
-                            if let Some(deep_last_child) = Self::deep_last_child(last_child.clone()) {
+                            if let Some(deep_last_child) = Self::deep_last_child(&last_child) {
                                 deep_last_child.borrow().next.clone() // c
                             } else {
                                 last_child.borrow().next.clone() // b
@@ -611,7 +644,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 .clone() // a
                 .map(|n| n.upgrade())
                 .flatten()
-                .map(|n| Self::deep_last_child(n))
+                .map(|n| Self::deep_last_child(&n))
                 .flatten()
                 .map(|n| Rc::downgrade(&n))
                 .or_else(|| parent.borrow().last_child.clone()) // b
@@ -638,7 +671,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
         // Step 4: Update the parent's next sibling's previous
         // (ie, parent.(OLD) deep_last_child.next.previous) to be child
-        if let Some(deep_last_child) = InMemoryNode::deep_last_child(parent.clone()).or_else(|| Some(parent.clone())) {
+        if let Some(deep_last_child) = InMemoryNode::deep_last_child(&parent).or_else(|| Some(parent.clone())) {
             if let Some(Some(deep_last_child_next)) = deep_last_child.borrow().next.clone().map(|n| n.upgrade()) {
                 deep_last_child_next.borrow_mut().previous = Some(Rc::downgrade(&child));
             }
@@ -665,7 +698,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             // Step 4: set parent.(OLD) last_child.deep_last_child.next to child
             if let Some(parent_last_child) = &parent_mut.last_child {
                 if let Some(parent_last_child) = parent_last_child.upgrade() {
-                    if let Some(foo) = Self::deep_last_child(parent_last_child) {
+                    if let Some(foo) = Self::deep_last_child(&parent_last_child) {
                         (*foo.borrow_mut()).next = Some(Rc::downgrade(&child));
                         println!(
                             "c. {:?}.next = {:?}",
@@ -726,7 +759,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 .clone()
                 .map(|p| p.upgrade())
                 .flatten();
-            let deep_last_child = Self::deep_last_child(child.clone());
+            let deep_last_child = Self::deep_last_child(child);
 
             (child.clone(), previous_child.clone(), deep_last_child)
         };
@@ -734,7 +767,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         // Step 1: child_mut.previous.next = child_mut.next
         // println!("PREV: {:?}", previous_child.clone().map(|p| p.borrow().metadata.clone()));
         if let Some(previous_child) = previous_child {
-            (*previous_child.borrow_mut()).next = Self::deep_last_child(child.clone())
+            (*previous_child.borrow_mut()).next = Self::deep_last_child(&child)
                 .or_else(|| Some(child.clone()))
                 .map(|n| n.borrow().next.clone())
                 .flatten()
@@ -818,12 +851,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 .clone()
                 .map(|p| p.upgrade())
                 .flatten();
-            let deep_last_child = Self::deep_last_child(old_child.clone());
+            let deep_last_child = Self::deep_last_child(&old_child);
 
             (old_child.clone(), previous_child.clone(), deep_last_child)
         };
 
-        let new_child_deep_last_child = Self::deep_last_child(new_child.clone());
+        let new_child_deep_last_child = Self::deep_last_child(&new_child);
 
         {
             let mut new_child_mut = new_child.borrow_mut();

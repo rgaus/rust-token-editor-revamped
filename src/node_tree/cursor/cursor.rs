@@ -328,7 +328,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     ///
     /// ie: calling this function on the root node would select the entire token tree
     pub fn new_across_subtree(node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
-        let deep_last_child = InMemoryNode::deep_last_child(node.clone()).unwrap_or(node.clone());
+        let deep_last_child = InMemoryNode::deep_last_child(node).unwrap_or_else(|| node.clone());
         let deep_last_child_length = InMemoryNode::literal(&deep_last_child).len();
         Self {
             primary: Cursor::new(node.clone()),
