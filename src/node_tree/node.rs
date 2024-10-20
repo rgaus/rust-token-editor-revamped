@@ -450,6 +450,14 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         depth
     }
 
+    pub fn deep_children_length(node: &Rc<RefCell<Self>>) -> usize {
+        if node.borrow().children.is_empty() {
+            0
+        } else {
+            1 + node.borrow().children.iter().map(Self::deep_children_length).sum::<usize>()
+        }
+    }
+
     /// When called, reparses the child at the given index with tke parser associated with each
     /// token in the token tree.
     ///
@@ -918,6 +926,8 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             // Step N: Update new_child.previous to be old_child.previous
             (*new_child_mut).previous = old_child.borrow().previous.clone();
         }
+
+        Self::reassign_subtree_indexes(&new_child);
 
         {
             let mut parent_mut = parent.borrow_mut();
