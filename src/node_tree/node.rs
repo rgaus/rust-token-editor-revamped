@@ -913,14 +913,14 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 (*deep_last_child_next.borrow_mut()).previous = Some(
                     Rc::downgrade(&new_child_deep_last_child.unwrap_or(new_child.clone()))
                 );
-            } else if let Some(old_child_next) = old_child
-                .borrow()
-                .next
-                .clone()
-                .map(|n| n.upgrade())
-                .flatten()
-            {
-                (*old_child_next.borrow_mut()).next = Some(Rc::downgrade(&new_child));
+            // } else if let Some(old_child_next) = old_child
+            //     .borrow()
+            //     .next
+            //     .clone()
+            //     .map(|n| n.upgrade())
+            //     .flatten()
+            // {
+            //     (*old_child_next.borrow_mut()).next = Some(Rc::downgrade(&new_child));
             };
 
             // Step N: Update new_child.previous to be old_child.previous
