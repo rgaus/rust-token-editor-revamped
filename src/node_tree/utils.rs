@@ -10,6 +10,14 @@ pub enum Direction {
     Backwards,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Newline {
+    Ignore,
+    ShouldTerminate,
+}
+
+pub const NEWLINE: &'static char = &'\n';
+
 const CHAR_OF_VALUE_255: &'static char = &(255 as char);
 
 /// Returns true if the given char is a lower word char according to stock vim definitions

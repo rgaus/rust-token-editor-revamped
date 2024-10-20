@@ -1,4 +1,4 @@
-use crate::node_tree::utils::{Inclusivity, is_lower_word_char, is_upper_word_char};
+use crate::node_tree::utils::{Inclusivity, is_lower_word_char, is_upper_word_char, Newline, NEWLINE};
 use std::{cell::RefCell, rc::Rc};
 
 // An enum used by seek_forwards_until to control how seeking should commence.
@@ -23,19 +23,23 @@ impl CursorSeek {
             until_fn: Rc::new(RefCell::new(until_fn)),
         }
     }
-    pub fn advance_until_char_then_done(character: char) -> Self {
+    pub fn advance_until_char_then_done(character: char, newline: Newline) -> Self {
         CursorSeek::advance_until(move |c, _i| {
             if c == character {
+                CursorSeek::Done
+            } else if newline == Newline::ShouldTerminate && c == *NEWLINE {
                 CursorSeek::Done
             } else {
                 CursorSeek::Continue
             }
         })
     }
-    pub fn advance_until_char_then_stop(character: char) -> Self {
+    pub fn advance_until_char_then_stop(character: char, newline: Newline) -> Self {
         CursorSeek::advance_until(move |c, _i| {
             if c == character {
                 CursorSeek::Stop
+            } else if newline == Newline::ShouldTerminate && c == *NEWLINE {
+                CursorSeek::Done
             } else {
                 CursorSeek::Continue
             }
@@ -214,6 +218,22 @@ impl CursorSeek {
                 })
             } else {
                 CursorSeek::Stop
+            }
+        })
+    }
+
+    pub fn advance_until_line_end(inclusive: Inclusivity) -> Self {
+        match inclusive {
+            Inclusivity::Inclusive => CursorSeek::advance_until_char_then_done(*NEWLINE, Newline::ShouldTerminate),
+            Inclusivity::Exclusive => CursorSeek::advance_until_char_then_stop(*NEWLINE, Newline::ShouldTerminate),
+        }
+    }
+    pub fn advance_until_line_start() -> Self {
+        CursorSeek::advance_until(move |c, _i| {
+            if c == *NEWLINE {
+                CursorSeek::Stop
+            } else {
+                CursorSeek::Continue
             }
         })
     }
