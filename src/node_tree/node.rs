@@ -517,12 +517,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     }
 
     pub fn insert_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>, index: usize) -> Rc<RefCell<Self>> {
-        println!(
-            "CHILD: {:?} PARENT: {:?} INDEX: {}",
-            child.borrow().metadata,
-            parent.borrow().metadata,
-            index,
-        );
+        // println!(
+        //     "CHILD: {:?} PARENT: {:?} INDEX: {}",
+        //     child.borrow().metadata,
+        //     parent.borrow().metadata,
+        //     index,
+        // );
 
         // NOTE: appending a child is the most common case which has an optimized write path that
         // handles edge cases properly. So if this insert is inserting at the end of the child
@@ -629,16 +629,16 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                         })
                         .flatten()
                 };
-                println!(
-                    "a. {:?}.next = {:?}",
-                    child_mut.metadata,
-                    child_mut
-                        .next
-                        .clone()
-                        .map(|n| n.upgrade())
-                        .flatten()
-                        .map(|n| n.borrow().metadata.clone())
-                );
+                // println!(
+                //     "a. {:?}.next = {:?}",
+                //     child_mut.metadata,
+                //     child_mut
+                //         .next
+                //         .clone()
+                //         .map(|n| n.upgrade())
+                //         .flatten()
+                //         .map(|n| n.borrow().metadata.clone())
+                // );
             }
 
             // Step N: make the new child's previous either:
@@ -692,11 +692,11 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 // Step 3: Update parent.first_child to be child IF this is the first node being
                 // added to this parent
                 (*parent_mut).first_child = Some(Rc::downgrade(&child));
-                println!(
-                    "b. {:?}.next = {:?}",
-                    parent_mut.metadata,
-                    child.borrow().metadata
-                );
+                // println!(
+                //     "b. {:?}.next = {:?}",
+                //     parent_mut.metadata,
+                //     child.borrow().metadata
+                // );
 
                 // Step 5: Update parent.next to be child IF this is the first node being added
                 // to this parent
@@ -708,11 +708,11 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 if let Some(parent_last_child) = parent_last_child.upgrade() {
                     if let Some(foo) = Self::deep_last_child(&parent_last_child) {
                         (*foo.borrow_mut()).next = Some(Rc::downgrade(&child));
-                        println!(
-                            "c. {:?}.next = {:?}",
-                            foo.borrow().metadata,
-                            child.borrow().metadata
-                        );
+                        // println!(
+                        //     "c. {:?}.next = {:?}",
+                        //     foo.borrow().metadata,
+                        //     child.borrow().metadata
+                        // );
                     }
                 }
             }
@@ -722,16 +722,16 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 if let Some(upgraded_last_child) = last_child.upgrade() {
                     let parent_old_last_child = upgraded_last_child.borrow().first_child.clone(); // child.first_child
 
-                    println!(
-                        "d. {:?}.next = {:?}.or({:?})",
-                        upgraded_last_child.borrow().metadata,
-                        parent_old_last_child
-                            .clone()
-                            .map(|n| n.upgrade())
-                            .flatten()
-                            .map(|n| n.borrow().metadata.clone()),
-                        child.borrow().metadata,
-                    );
+                    // println!(
+                    //     "d. {:?}.next = {:?}.or({:?})",
+                    //     upgraded_last_child.borrow().metadata,
+                    //     parent_old_last_child
+                    //         .clone()
+                    //         .map(|n| n.upgrade())
+                    //         .flatten()
+                    //         .map(|n| n.borrow().metadata.clone()),
+                    //     child.borrow().metadata,
+                    // );
 
                     // parent.(OLD) last_child
                     // or fall back to the child itself if there are no nodes inside
