@@ -517,7 +517,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                 NodeSeek::Continue(Some(literal))
             } else {
                 // The node was at or above `earlier_cursor.node`, so bail out
-                NodeSeek::Stop
+                NodeSeek::Done(None)
             }
         });
 
