@@ -3,7 +3,7 @@ use colored::{ColoredString, Colorize};
 use crate::node_tree::{
     cursor::CursorSeek,
     node::{InMemoryNode, NodeSeek, TokenKindTrait, NodeMetadata},
-    utils::{Direction, Inclusivity},
+    utils::{Direction, Inclusivity, NEWLINE},
 };
 use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
 
@@ -33,6 +33,31 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     pub fn new_at(node: Rc<RefCell<InMemoryNode<TokenKind>>>, offset: usize) -> Self {
         Self { node, offset }
     }
+    pub fn new_at_rows_cols(root: Rc<RefCell<InMemoryNode<TokenKind>>>, rows_cols: (usize, usize)) -> Self {
+        let (rows, cols) = rows_cols;
+        let mut row_counter = 1;
+        let mut col_counter = 1;
+
+        let (cursor, _) = Self::new(root).seek_forwards_until(|c, _i| {
+            if row_counter == rows {
+                // Before reaching the first newline, count the col chars
+                if col_counter < cols {
+                    col_counter += 1;
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Done
+                }
+            } else if c == *NEWLINE {
+                // From that point on count each newline
+                row_counter += 1;
+                CursorSeek::Continue
+            } else {
+                CursorSeek::Continue
+            }
+        });
+
+        cursor
+    }
 
     /// When called, create a new Selection out of this cursor.
     ///
@@ -42,11 +67,29 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         Selection::new_from_cursor(self.clone())
     }
 
+    pub fn to_rows_cols(self: &Self) -> (usize, usize) {
+        let mut row_counter = 1;
+        let mut col_counter = 1;
+
+        let _ = self.seek_backwards_until(|c, _i| {
+            if row_counter == 0 {
+                // Before reaching the first newline, count the col chars
+                col_counter += 1;
+            } else if c == *NEWLINE {
+                // From that point on count each newline
+                row_counter += 1;
+            };
+            CursorSeek::Continue
+        });
+
+        (row_counter, col_counter)
+    }
+
     /// When called, seeks starting at the cursor position character by character through the node
     /// structure in the giren `direction` until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_until<UntilFn>(self: &Self, direction: Direction, until_fn: UntilFn) -> (Self, String)
+    pub fn seek_until<UntilFn>(self: &Self, direction: Direction, mut until_fn: UntilFn) -> (Self, String)
     where
-        UntilFn: Fn(char, usize) -> CursorSeek,
+        UntilFn: FnMut(char, usize) -> CursorSeek,
     {
         let mut global_char_counter = 0; // Store a global count of characters processed
 
@@ -254,7 +297,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
     pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
     where
-        UntilFn: Fn(char, usize) -> CursorSeek,
+        UntilFn: FnMut(char, usize) -> CursorSeek,
     {
         self.seek_until(Direction::Forwards, until_fn)
     }
@@ -275,7 +318,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
     pub fn seek_backwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
     where
-        UntilFn: Fn(char, usize) -> CursorSeek,
+        UntilFn: FnMut(char, usize) -> CursorSeek,
     {
         self.seek_until(Direction::Backwards, until_fn)
     }
