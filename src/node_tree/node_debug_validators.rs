@@ -2,11 +2,8 @@ use crate::node_tree::node::{InMemoryNode, NodeMetadata, TokenKindTrait};
 use std::{cell::RefCell, rc::Rc};
 use std::fmt::Debug;
 
-/// Currently, there is no way to check to see if nodes that could be copies of each other are
-/// equal. I may add an id or something like that. Until then, check to see if their metadata
-/// matches, which should be good enough a large percentage of the time.
 fn nodes_equal_by_hueristic<TokenKind: TokenKindTrait>(a: &Rc<RefCell<InMemoryNode<TokenKind>>>, b: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> bool {
-    a.borrow().metadata == b.borrow().metadata
+    a.borrow().index == b.borrow().index
 }
 
 #[derive(Debug)]
