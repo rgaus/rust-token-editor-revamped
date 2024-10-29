@@ -12,11 +12,12 @@ use rslint_example::convert_rslint_syntaxnode_to_inmemorynode;
 use rslint_parser::{parse_text, SyntaxKind};
 
 use crate::node_tree::{
-    cursor::{Cursor, CursorSeek},
+    cursor::{Cursor, CursorSeek, Selection},
     node::{
         InMemoryNode,
+        NodeMetadata,
         // NodeSeek,
-    }, utils::Inclusivity,
+    }, utils::{Inclusivity, Newline},
     // utils::Inclusivity, fractional_index::VariableSizeFractionalIndex,
     // fractional_index::FractionalIndex,
 };
@@ -571,20 +572,26 @@ fn main() {
 
     // rslint_example::main();
     println!("------ TWO ------");
-    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
-    //     let foo = "brew";
-    //     function main() {
-    //         console.log("hello world");
-    //     }
+    let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
+        let foo = "brew";
+        function main() {
+            console.log("hello world");
+        }
 
-    //     function fizbuzz(n) {
-    //         if (n % 2 == 0) {
-    //             return "fizz";
-    //         } else if (n % 3 == 0) {
-    //             return "buzz";
-    //         } else {
-    //             return "fizzbuzz";
-    //         }
+        function fizbuzz(n) {
+            if (n % 2 == 0) {
+                return "fizz";
+            } else if (n % 3 == 0) {
+                return "buzz";
+            } else {
+                return "fizzbuzz";
+            }
+        }
+    "#);
+    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
     //     }
     // "#);
     // let root = InMemoryNode::<SyntaxKind>::new_from_parsed(r#"
@@ -593,22 +600,32 @@ fn main() {
     //         console.log("hello world");
     //     }
     // "#);
-    let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
+    // let root = InMemoryNode::<SyntaxKind>::new_from_parsed("console.log(123);");
     InMemoryNode::dump(&root);
     // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
 
     let mut selection = Cursor::new(root.clone()).selection();
-    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(13)));
-    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(8)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(18)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(9)));
+    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByLines(5)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(3)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::advance_until_char_then_done('"', Newline::ShouldTerminate)));
+    // selection.set_secondary(selection.secondary.seek_backwards(CursorSeek::advance_until_line_start()));
     println!("PRE: {:?}\n", selection);
-    selection.delete().unwrap();
-    println!("-------");
-    println!("POST: {:?}", Selection::new_across_subtree(&root));
-    InMemoryNode::dump(&root);
+    // // selection.delete_raw().unwrap();
+    // selection.delete().unwrap();
+    // println!("-------");
+    // println!("POST: {:?}", Selection::new_across_subtree(&root));
+    // InMemoryNode::dump(&root);
+    // // InMemoryNode::dump_trace(&root);
 
-    let mut selection = Cursor::new(root).selection();
-    selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
-    println!("RESULT: {:?}", selection);
+    // let mut selection = Cursor::new(root.clone()).selection();
+    // selection.set_secondary(selection.secondary.seek_forwards_until(|_n, _ct| CursorSeek::Continue));
+    // println!("RESULT: {:?} {:?}", selection, selection.secondary.to_rows_cols());
+
+    // println!("NEW: {:?}", Cursor::new_at_rows_cols(root.clone(), (15, 1)));
 
     println!("------ END TWO ------");
     // println!("-------");

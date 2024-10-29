@@ -8,6 +8,7 @@ pub enum CursorSeek {
     Stop,                      // Finish and don't include this character
     Done,                      // Finish and do include this character
     AdvanceByCharCount(usize), // Advance by N chars before checking again
+    AdvanceByLines(usize),     // Advance by N lines before checking again
     AdvanceUntil {
         // Advance until the given `until_fn` check passes
         until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
@@ -23,6 +24,7 @@ impl CursorSeek {
             until_fn: Rc::new(RefCell::new(until_fn)),
         }
     }
+
     pub fn advance_until_char_then_done(character: char, newline: Newline) -> Self {
         CursorSeek::advance_until(move |c, _i| {
             if c == character {
