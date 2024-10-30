@@ -101,9 +101,14 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         let mut cached_char_until_count = 0;
 
         // To handle CursorSeek::AdvanceByLineCount(n), keep a counter of lines to skip:
+        #[derive(Debug, PartialEq)]
+        enum AdvanceByLineCountState {
+            Inactive,
+            ScanningForwardTowardsNewline { chars_before_start: usize },
+            AdvancingCharactersOnNextLine { remaining: usize },
+        }
         let mut cached_line_until_count = 0;
-        let mut cached_line_reached_newline = false;
-        let mut cached_line_current_cols: Option<usize> = None;
+        let mut cached_line_state = AdvanceByLineCountState::Inactive;
 
         // To handle CursorSeek::AdvanceUntil(...), keep a stack of `until_fn`s and their
         // corresponding counts - these should always have the same length:
@@ -167,12 +172,9 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
                 // If there's a line_until_count, then run until that exhausts iself
                 if cached_line_until_count > 0 {
-                    dbg!(cached_line_until_count);
-                    dbg!(cached_line_reached_newline);
+                    dbg!(cached_line_until_count, &cached_line_state);
 
-                    let cols = if let Some(cols) = cached_line_current_cols {
-                        cols
-                    } else {
+                    if cached_line_state == AdvanceByLineCountState::Inactive {
                         println!("--- LINE START! ---");
                         // 1. Figure out how many characters are before the current cursor in the
                         //    line
@@ -186,59 +188,62 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             }
                             return NodeSeek::Continue(());
                         });
-                        cached_line_current_cols = Some(current_cols+1);
 
-                        current_cols
-                    };
-                    dbg!(cols);
+                        cached_line_state = AdvanceByLineCountState::ScanningForwardTowardsNewline {
+                            chars_before_start: current_cols+1,
+                        };
+                    }
 
-                    if cached_line_reached_newline {
-                        let mut cols_copy = cols;
-                        if cols_copy > 0 {
-                            // 4. Advance cached_line_current_cols (in this context, cols) characters 
-                            //    to get to the next line
-                            cols_copy -= 1;
-                            cached_line_current_cols = Some(cols_copy);
-                        } else {
-                            // 3. A newline has been reached going the seek direction, so after
-                            //    this, advance by the number of cols before the cursor to get back
-                            //    to the same place
-                            cols_copy = cols + 1;
-                            cached_line_current_cols = Some(cols_copy);
-                        }
-
-                        if cols_copy > 0 {
+                    match cached_line_state {
+                        AdvanceByLineCountState::Inactive => {
+                            unreachable!("AdvanceByLineCountState::Inactive should have been handled earlier in the control flow!");
+                        },
+                        AdvanceByLineCountState::ScanningForwardTowardsNewline { chars_before_start } => {
                             result.push(character);
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
                                 Direction::Backwards => new_offset - 1,
                             };
+
+                            // 2. If the first newline hasn't been reached, then keep going until it is
+                            // reached
+                            if character == *NEWLINE {
+                                cached_line_state = AdvanceByLineCountState::AdvancingCharactersOnNextLine {
+                                    remaining: chars_before_start,
+                                };
+                            };
                             continue;
-                        }
+                        },
+                        AdvanceByLineCountState::AdvancingCharactersOnNextLine { remaining } => {
+                            let mut remaining_copy = remaining;
+                            if remaining_copy > 0 {
+                                // 3. Advance cached_line_current_cols (in this context, chars_before_start) characters 
+                                //    to get to the next line
+                                remaining_copy -= 1;
+                                cached_line_state = AdvanceByLineCountState::AdvancingCharactersOnNextLine {
+                                    remaining: remaining_copy,
+                                };
+                            }
 
-                        cached_line_until_count -= 1;
-                        cached_line_reached_newline = false;
-                        cached_line_current_cols = None;
-                        println!("--- LINE DONE! --- cached_line_until_count={}", cached_line_until_count);
+                            if remaining_copy > 0 {
+                                result.push(character);
+                                global_char_counter += 1;
+                                new_offset = match direction {
+                                    Direction::Forwards => new_offset + 1,
+                                    Direction::Backwards => new_offset - 1,
+                                };
+                                continue;
+                            }
 
-                        if cached_line_until_count > 0 {
-                            continue;
-                        }
-                    } else {
-                        result.push(character);
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
+                            cached_line_until_count -= 1;
+                            cached_line_state = AdvanceByLineCountState::Inactive;
+                            println!("--- LINE DONE! --- cached_line_until_count={}", cached_line_until_count);
 
-                        // 2. If the first newline hasn't been reached, then keep going until it is
-                        // reached
-                        if character == *NEWLINE {
-                            cached_line_reached_newline = true;
-                        };
-                        continue;
+                            if cached_line_until_count > 0 {
+                                continue;
+                            }
+                        },
                     }
                 }
 
