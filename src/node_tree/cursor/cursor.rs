@@ -264,6 +264,9 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             continue;
                         }
                         CursorSeek::AdvanceByLines(n) => {
+                            if n == 0 {
+                                continue;
+                            };
                             cached_line_until_count += n;
 
                             // NOTE: re-add the character back to the characters vec, so that it
@@ -344,6 +347,9 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         continue;
                     }
                     CursorSeek::AdvanceByLines(n) => {
+                        if n == 0 {
+                            continue;
+                        };
                         cached_line_until_count += n;
 
                         // NOTE: re-add the character back to the characters vec, so that it
