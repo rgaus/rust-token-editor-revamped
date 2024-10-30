@@ -420,8 +420,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     /// When called, performs the given `seek` operation once, causing the cursor to seek forwards
     /// by the given amount
     pub fn seek_forwards(self: &Self, seek: CursorSeek) -> (Self, String) {
-        self.seek_forwards_until(|_character, index| {
-            if index == 0 {
+        let mut is_first = true;
+        self.seek_forwards_until(|_character, _index| {
+            if is_first {
+                is_first = false;
                 seek.clone()
             } else {
                 CursorSeek::Stop
@@ -441,8 +443,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     /// When called, performs the given `seek` operation once, causing the cursor to seek backwards
     /// by the given amount
     pub fn seek_backwards(self: &Self, seek: CursorSeek) -> (Self, String) {
-        self.seek_backwards_until(|_character, index| {
-            if index == 0 {
+        let mut is_first = true;
+        self.seek_backwards_until(|_character, _index| {
+            if is_first {
+                is_first = false;
                 seek.clone()
             } else {
                 CursorSeek::Stop
