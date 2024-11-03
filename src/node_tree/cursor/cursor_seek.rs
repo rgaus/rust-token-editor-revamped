@@ -21,6 +21,8 @@ pub enum CursorSeek {
     AdvanceUntil {
         // Advance until the given `until_fn` check passes
         until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
+        // Optionally limit the operation to only run in a given direction
+        only_in_direction: Option<Direction>,
     },
     ChangeDirection(Direction), // Change to seeking in the given direction
 }
@@ -31,6 +33,17 @@ impl CursorSeek {
         T: FnMut(char, usize) -> CursorSeek + 'static,
     {
         CursorSeek::AdvanceUntil {
+            only_in_direction: None,
+            until_fn: Rc::new(RefCell::new(until_fn)),
+        }
+    }
+
+    pub fn advance_until_only<T>(direction: Direction, until_fn: T) -> Self
+    where
+        T: FnMut(char, usize) -> CursorSeek + 'static,
+    {
+        CursorSeek::AdvanceUntil {
+            only_in_direction: Some(direction),
             until_fn: Rc::new(RefCell::new(until_fn)),
         }
     }
@@ -163,7 +176,7 @@ impl CursorSeek {
         // sequence of other non-blank characters, separated with white space (spaces,
         // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
         // is also considered to be a word.
-        CursorSeek::advance_until(move |c, _i| {
+        CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
             if is_lower_word_char(c) {
                 // If a word character, keep going
                 hit_word_char = true;
@@ -210,7 +223,7 @@ impl CursorSeek {
         // From :h WORD -
         // A WORD consists of a sequence of non-blank characters, separated with white
         // space.  An empty line is also considered to be a WORD.
-        CursorSeek::advance_until(move |c, _i| {
+        CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
             if is_upper_word_char(c) {
                 // If a word character, keep going
                 hit_word_char = true;
@@ -249,17 +262,23 @@ impl CursorSeek {
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING FORWARDS!
     pub fn advance_until_line_end(inclusive: Inclusivity) -> Self {
-        match inclusive {
-            Inclusivity::Inclusive => CursorSeek::advance_until_char_then_done(*NEWLINE, Newline::ShouldTerminate),
-            Inclusivity::Exclusive => CursorSeek::advance_until_char_then_stop(*NEWLINE, Newline::ShouldTerminate),
-        }
+        CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
+            if c == *NEWLINE {
+                match inclusive {
+                    Inclusivity::Inclusive => CursorSeek::Done,
+                    Inclusivity::Exclusive => CursorSeek::Stop,
+                }
+            } else {
+                CursorSeek::Continue
+            }
+        })
     }
 
     /// When called, advance backwards to the start of the line.
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING BACKWARDS!
     pub fn advance_until_line_start() -> Self {
-        CursorSeek::advance_until(move |c, _i| {
+        CursorSeek::advance_until_only(Direction::Backwards, move |c, _i| {
             if c == *NEWLINE {
                 CursorSeek::Stop
             } else {
@@ -273,7 +292,9 @@ impl CursorSeek {
         CursorSeek::advance_until(|_c, _i| CursorSeek::Continue)
     }
 
-    // %
+    /// When called, advance to the next delimeter. See :help % for an outline of the behavior
+    ///
+    /// NOTE: ONLY WORKS WHEN SEEKING FORWARDS!
     pub fn advance_until_matching_delimiter(inclusive: Inclusivity) -> Self {
         #[derive(Debug)]
         enum Mode {
@@ -284,7 +305,7 @@ impl CursorSeek {
         }
         let mut mode = Mode::FindingInitialDelimeter(vec![]);
 
-        CursorSeek::advance_until(move |c, _i| {
+        CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
             match &mode {
                 Mode::FindingInitialDelimeter(buffer) => {
                     // No delimiter found, add to buffer and keep going

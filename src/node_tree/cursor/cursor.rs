@@ -291,9 +291,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             };
                             continue;
                         }
-                        CursorSeek::AdvanceUntil {
-                            until_fn: char_until_fn,
-                        } => {
+                        CursorSeek::AdvanceUntil { until_fn: char_until_fn, only_in_direction } => {
+                            if only_in_direction.is_some_and(|d| d != direction) {
+                                panic!("CursorSeek::AdvanceUntil only_in_direction was {only_in_direction:?}, but direction was {direction:?}. This is not allowed!");
+                            };
                             advance_until_fn_stack.push(char_until_fn);
                             advance_until_char_counter_stack.push(0);
 
@@ -365,9 +366,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         };
                         continue;
                     }
-                    CursorSeek::AdvanceUntil {
-                        until_fn: char_until_fn,
-                    } => {
+                    CursorSeek::AdvanceUntil { until_fn: char_until_fn, only_in_direction } => {
+                        if only_in_direction.is_some_and(|d| d != direction) {
+                            panic!("CursorSeek::AdvanceUntil only_in_direction was {only_in_direction:?}, but direction was {direction:?}. This is not allowed!");
+                        };
                         advance_until_fn_stack.push(char_until_fn);
                         advance_until_char_counter_stack.push(0);
 
