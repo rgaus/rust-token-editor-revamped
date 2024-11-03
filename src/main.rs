@@ -605,11 +605,15 @@ fn main() {
     // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
 
     let mut selection = Cursor::new(root.clone()).selection();
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_char_then_stop('{', Newline::Ignore)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive)));
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(18)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(9)));
-    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
-    selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByLines(5)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByLines(2)));
+    println!("--------");
+    // selection.set_secondary(selection.secondary.seek_backwards(CursorSeek::AdvanceByLines(2)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(3)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::advance_until_char_then_done('"', Newline::ShouldTerminate)));
     // selection.set_secondary(selection.secondary.seek_backwards(CursorSeek::advance_until_line_start()));

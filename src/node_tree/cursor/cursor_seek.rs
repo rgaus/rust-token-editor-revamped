@@ -6,21 +6,24 @@ use crate::node_tree::utils::{
     NEWLINE,
     is_delimiter,
     Delimiter,
+    Direction, DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS,
 };
 use std::{cell::RefCell, rc::Rc};
 
 // An enum used by seek_forwards_until to control how seeking should commence.
 #[derive(Clone)]
 pub enum CursorSeek {
-    Continue,                  // Seek to the next character
-    Stop,                      // Finish and don't include this character
-    Done,                      // Finish and do include this character
-    AdvanceByCharCount(usize), // Advance by N chars before checking again
-    AdvanceByLines(usize),     // Advance by N lines before checking again
+    Continue,                   // Seek to the next character
+    Stop,                       // Finish and don't include this character
+    Done,                       // Finish and do include this character
+    AdvanceByCharCount(usize),  // Advance by N chars before checking again
+    AdvanceByLines(usize),      // Advance by N lines before checking again
     AdvanceUntil {
         // Advance until the given `until_fn` check passes
         until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
     },
+    ChangeDirection(Direction), // Change to seeking in the given direction
+    SwitchDirection,            // If seeking forwards, now seek backwards, and vice versa
 }
 
 impl CursorSeek {
@@ -273,34 +276,54 @@ impl CursorSeek {
 
     // %
     pub fn advance_until_matching_delimiter(inclusive: Inclusivity) -> Self {
+        #[derive(Debug)]
         enum Mode {
-            FindingDelimeter(Vec<char>),
-            FoundDelimiterSeekingForwards(Vec<char>, Delimiter)
+            FindingInitialDelimeter(Vec<char>),
+            FindingDelimiterSeekingForwards(Vec<char>, Delimiter),
+            FindingDelimiterSeekingBackwards(Vec<char>, Delimiter),
+            StopOnNextChar,
         }
-        let mut mode = Mode::FindingDelimeter(vec![]);
+        let mut mode = Mode::FindingInitialDelimeter(vec![]);
 
         CursorSeek::advance_until(move |c, _i| {
-            let buffer = match &mode {
-                Mode::FindingDelimeter(buffer) => buffer,
-                Mode::FoundDelimiterSeekingForwards(buffer, _) => buffer,
-            };
-
-            let Some(found_delimeter) = is_delimiter(&buffer[..]) else {
-                // No delimiter found, add to buffer and keep going
-                let mut buffer_copy = buffer.clone();
-                buffer_copy.insert(0, c);
-                buffer_copy.pop();
-                mode = Mode::FindingDelimeter(buffer_copy);
-                return CursorSeek::Continue;
-            };
-
             match &mode {
-                Mode::FindingDelimeter(buffer) => {
-                    mode = Mode::FoundDelimiterSeekingForwards(buffer.clone(), found_delimeter);
-                    CursorSeek::Continue
+                Mode::FindingInitialDelimeter(buffer) => {
+                    // No delimiter found, add to buffer and keep going
+                    let mut buffer_copy = buffer.clone();
+                    buffer_copy.push(c);
+                    if buffer_copy.len() > DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS {
+                        buffer_copy.remove(0);
+                    };
+
+                    let Some(found_delimeter) = is_delimiter(&buffer_copy[..]) else {
+                        // No delimiter found, add to buffer and keep going
+                        mode = Mode::FindingInitialDelimeter(buffer_copy);
+                        return CursorSeek::Continue;
+                    };
+
+                    if matches!(found_delimeter, Delimiter::End(..)) {
+                        mode = Mode::FindingDelimiterSeekingBackwards(buffer_copy, found_delimeter);
+                        CursorSeek::ChangeDirection(Direction::Backwards)
+                    } else {
+                        mode = Mode::FindingDelimiterSeekingForwards(buffer_copy, found_delimeter);
+                        CursorSeek::Continue
+                    }
                 },
-                Mode::FoundDelimiterSeekingForwards(_buffer, initial_delimiter) => {
-                    match (initial_delimiter, found_delimeter) {
+                Mode::FindingDelimiterSeekingForwards(buffer, initial_delimiter) => {
+                    // No delimiter found, add to buffer and keep going
+                    let mut buffer_copy = buffer.clone();
+                    buffer_copy.push(c);
+                    if buffer_copy.len() > DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS {
+                        buffer_copy.remove(0);
+                    };
+
+                    let Some(found_delimeter) = is_delimiter(&buffer_copy[..]) else {
+                        // No delimiter found, add to buffer and keep going
+                        mode = Mode::FindingDelimiterSeekingForwards(buffer_copy, initial_delimiter.clone());
+                        return CursorSeek::Continue;
+                    };
+
+                    match (initial_delimiter, found_delimeter.clone()) {
                         (Delimiter::Start(initial_type, _), Delimiter::Midpoint(found_type, found_length))
                         | (Delimiter::Start(initial_type, _), Delimiter::End(found_type, found_length))
                         | (Delimiter::Start(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
@@ -311,26 +334,66 @@ impl CursorSeek {
                         | (Delimiter::Midpoint(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
                             if found_type == *initial_type => {
 
+                            dbg!(&initial_delimiter, found_delimeter);
                             // found_delimeter is a valid match! This is the end of the match
                             // process. If inclusive though, advance to the end of the found match.
                             if inclusive == Inclusivity::Inclusive {
-                                CursorSeek::AdvanceByCharCount(found_length-1)
+                                mode = Mode::StopOnNextChar;
+                                CursorSeek::AdvanceByCharCount(found_length)
                             } else {
                                 CursorSeek::Stop
                             }
                         },
                         (Delimiter::End(_, _), _) => {
-                            // Seek needs to happen in the other direction to go back to start? hmm
-                            //
-                            // Maybe implement something like CursorSeek::Series and
-                            // CursorSeek::SwapDirection?
-                            CursorSeek::Continue
+                            unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is Delimiter::End! This should be impossible.");
                         },
 
                         // The found delimeter doesn't fit with the given traversal, so skip it.
                         _ => CursorSeek::Continue,
                     }
                 },
+                Mode::FindingDelimiterSeekingBackwards(buffer, initial_delimiter) => {
+                    // No delimiter found, add to buffer and keep going
+                    let mut buffer_copy = buffer.clone();
+                    buffer_copy.push(c);
+                    if buffer_copy.len() > DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS {
+                        buffer_copy.remove(0);
+                    };
+
+                    let Some(found_delimeter) = is_delimiter(&buffer_copy[..]) else {
+                        // No delimiter found, add to buffer and keep going
+                        mode = Mode::FindingDelimiterSeekingBackwards(buffer_copy, initial_delimiter.clone());
+                        return CursorSeek::Continue;
+                    };
+
+                    match (initial_delimiter, found_delimeter) {
+                        (
+                            Delimiter::End(initial_type, _),
+                            Delimiter::Start(found_type, found_length)
+                        ) if found_type == *initial_type => {
+
+                            // found_delimeter is a valid match! This is the end of the match
+                            // process. If inclusive though, advance to the start of the found match.
+                            if inclusive == Inclusivity::Inclusive {
+                                mode = Mode::StopOnNextChar;
+                                CursorSeek::AdvanceByCharCount(found_length)
+                            } else {
+                                CursorSeek::Stop
+                            }
+                        },
+                        (Delimiter::End(_, _), _) => {
+                            unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is Delimiter::End! This should be impossible.");
+                        },
+                        (Delimiter::End(_, _), _) => {
+                            // The Seek needs to happen in the other direction to go back to start? hmm
+                            CursorSeek::ChangeDirection(Direction::Backwards)
+                        },
+
+                        // The found delimeter doesn't fit with the given traversal, so skip it.
+                        _ => CursorSeek::Continue,
+                    }
+                },
+                Mode::StopOnNextChar => CursorSeek::Stop,
             }
         })
     }

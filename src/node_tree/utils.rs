@@ -40,7 +40,7 @@ pub fn is_upper_word_char(c: char) -> bool {
 // ------------------------------------------------------------------------------------------------
 // This delimiter related stuff is used to implement %-type actions
 // Delimeters are chars like ([{}])
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DelimiterType {
     SingleQuote,
     DoubleQuote,
@@ -50,7 +50,7 @@ pub enum DelimiterType {
     CMultiLineComment,
     CPreprocesserConditional,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Delimiter {
     Start(DelimiterType, usize),
     End(DelimiterType, usize),

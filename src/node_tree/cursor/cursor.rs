@@ -91,6 +91,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     where
         UntilFn: FnMut(char, usize) -> CursorSeek,
     {
+        let mut direction = initial_direction;
         let mut global_char_counter = 0; // Store a global count of characters processed
 
         // The final node and offset values:
@@ -315,7 +316,18 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
                             advance_until_fn_stack.pop();
                             advance_until_char_counter_stack.pop();
-                        }
+                        },
+                        CursorSeek::ChangeDirection(new_direction) => {
+                            direction = new_direction;
+                            continue;
+                        },
+                        CursorSeek::SwitchDirection => {
+                            direction = match direction {
+                                Direction::Forwards => Direction::Backwards,
+                                Direction::Backwards => Direction::Forwards,
+                            };
+                            continue;
+                        },
                     }
                     if !advance_until_fn_stack.is_empty()
                         || !advance_until_char_counter_stack.is_empty()
@@ -382,6 +394,17 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             Direction::Backwards => new_offset - 1,
                         };
                         return NodeSeek::Done(());
+                    },
+                    CursorSeek::ChangeDirection(new_direction) => {
+                        direction = new_direction;
+                        continue;
+                    },
+                    CursorSeek::SwitchDirection => {
+                        direction = match direction {
+                            Direction::Forwards => Direction::Backwards,
+                            Direction::Backwards => Direction::Forwards,
+                        };
+                        continue;
                     },
                 }
             }
