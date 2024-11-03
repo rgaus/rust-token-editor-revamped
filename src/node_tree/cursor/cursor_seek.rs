@@ -354,12 +354,11 @@ impl CursorSeek {
                         | (Delimiter::Midpoint(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
                             if found_type == *initial_type => {
 
-                            dbg!(&initial_delimiter, found_delimeter);
                             // found_delimeter is a valid match! This is the end of the match
                             // process. If inclusive though, advance to the end of the found match.
                             if inclusive == Inclusivity::Inclusive {
                                 mode = Mode::StopOnNextChar;
-                                CursorSeek::AdvanceByCharCount(found_length)
+                                CursorSeek::AdvanceByCharCount(found_length - 1 /* the cursor width */)
                             } else {
                                 CursorSeek::Stop
                             }
