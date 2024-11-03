@@ -38,7 +38,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         let mut row_counter = 1;
         let mut col_counter = 1;
 
-        let (cursor, _) = Self::new(root).seek_forwards_until(|c, _i| {
+        let cursor = Self::new(root).seek_forwards_until(|c, _i| {
             if row_counter == rows {
                 // Before reaching the first newline, count the col chars
                 if col_counter < cols {
@@ -87,7 +87,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
     /// When called, seeks starting at the cursor position character by character through the node
     /// structure in the giren `direction` until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_until<UntilFn>(self: &Self, direction: Direction, mut until_fn: UntilFn) -> (Self, String)
+    pub fn seek_until<UntilFn>(self: &Self, initial_direction: Direction, mut until_fn: UntilFn) -> Self
     where
         UntilFn: FnMut(char, usize) -> CursorSeek,
     {
@@ -116,9 +116,8 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
             vec![];
         let mut advance_until_char_counter_stack: Vec<usize> = vec![];
 
-        let resulting_char_vectors = InMemoryNode::seek_until(&self.node, direction, Inclusivity::Inclusive, |node, ct| {
+        let _ = InMemoryNode::seek_until(&self.node, direction, Inclusivity::Inclusive, |node, ct| {
             new_node = node.clone();
-            let mut result = vec![];
 
             let node_literal = InMemoryNode::literal(node);
             let mut characters = if ct == 0 {
@@ -160,7 +159,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                     cached_char_until_count -= 1;
 
                     if cached_char_until_count > 0 {
-                        result.push(character);
                         global_char_counter += 1;
                         new_offset = match direction {
                             Direction::Forwards => new_offset + 1,
@@ -199,7 +197,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             unreachable!("AdvanceByLineCountState::Inactive should have been handled earlier in the control flow!");
                         },
                         AdvanceByLineCountState::ScanningForwardTowardsNewline { chars_before_start } => {
-                            result.push(character);
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
@@ -227,7 +224,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             }
 
                             if remaining_copy > 0 {
-                                result.push(character);
                                 global_char_counter += 1;
                                 new_offset = match direction {
                                     Direction::Forwards => new_offset + 1,
@@ -259,7 +255,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
                     match value {
                         CursorSeek::Continue => {
-                            result.push(character);
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
@@ -312,7 +307,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             advance_until_char_counter_stack.pop();
                         }
                         CursorSeek::Done => {
-                            result.push(character);
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
@@ -332,7 +326,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
                 match until_fn(character, global_char_counter) {
                     CursorSeek::Continue => {
-                        result.push(character);
                         global_char_counter += 1;
                         new_offset = match direction {
                             Direction::Forwards => new_offset + 1,
@@ -380,37 +373,28 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         continue;
                     }
                     CursorSeek::Stop => {
-                        return NodeSeek::Done(result);
+                        return NodeSeek::Done(());
                     }
                     CursorSeek::Done => {
-                        result.push(character);
                         global_char_counter += 1;
                         new_offset = match direction {
                             Direction::Forwards => new_offset + 1,
                             Direction::Backwards => new_offset - 1,
                         };
-                        return NodeSeek::Done(result);
-                    }
+                        return NodeSeek::Done(());
+                    },
                 }
             }
 
-            NodeSeek::Continue(result)
+            NodeSeek::Continue(())
         });
 
-        // Once all the seeks have been performed, take the vectors of caracters seeked through
-        // from each node and flatten them all together into a string.
-        let resulting_chars = resulting_char_vectors.flat_map(|vector| vector.into_iter());
-        let output_string = match direction {
-            Direction::Forwards => resulting_chars.collect::<String>(),
-            Direction::Backwards => resulting_chars.rev().collect::<String>(),
-        };
-
-        (Self::new_at(new_node, new_offset), output_string)
+        Self::new_at(new_node, new_offset)
     }
 
     /// When called, seeks forward starting at the cursor position character by character through
     /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
+    pub fn seek_forwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> Self
     where
         UntilFn: FnMut(char, usize) -> CursorSeek,
     {
@@ -419,7 +403,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
     /// When called, performs the given `seek` operation once, causing the cursor to seek forwards
     /// by the given amount
-    pub fn seek_forwards(self: &Self, seek: CursorSeek) -> (Self, String) {
+    pub fn seek_forwards(self: &Self, seek: CursorSeek) -> Self {
         let mut is_first = true;
         self.seek_forwards_until(|_character, _index| {
             if is_first {
@@ -433,7 +417,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
     /// When called, seeks backward starting at the cursor position character by character through
     /// the node structure until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_backwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> (Self, String)
+    pub fn seek_backwards_until<UntilFn>(self: &Self, until_fn: UntilFn) -> Self
     where
         UntilFn: FnMut(char, usize) -> CursorSeek,
     {
@@ -442,7 +426,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
     /// When called, performs the given `seek` operation once, causing the cursor to seek backwards
     /// by the given amount
-    pub fn seek_backwards(self: &Self, seek: CursorSeek) -> (Self, String) {
+    pub fn seek_backwards(self: &Self, seek: CursorSeek) -> Self {
         let mut is_first = true;
         self.seek_backwards_until(|_character, _index| {
             if is_first {
@@ -498,12 +482,12 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         }
     }
 
-    pub fn set_primary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
-        self.primary = input.0;
+    pub fn set_primary(self: &mut Self, input: Cursor<TokenKind>) -> &mut Self {
+        self.primary = input;
         self
     }
-    pub fn set_secondary(self: &mut Self, input: (Cursor<TokenKind>, String)) -> &mut Self {
-        self.secondary = input.0;
+    pub fn set_secondary(self: &mut Self, input: Cursor<TokenKind>) -> &mut Self {
+        self.secondary = input;
         self
     }
 
