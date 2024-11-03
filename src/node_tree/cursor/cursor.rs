@@ -72,12 +72,12 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         let mut col_counter = 1;
 
         let _ = self.seek_backwards_until(|c, _i| {
-            if row_counter == 0 {
-                // Before reaching the first newline, count the col chars
-                col_counter += 1;
-            } else if c == *NEWLINE {
+            if c == *NEWLINE {
                 // From that point on count each newline
                 row_counter += 1;
+            } else if row_counter == 1 {
+                // Before reaching the first newline, count the col chars
+                col_counter += 1;
             };
             CursorSeek::Continue
         });
