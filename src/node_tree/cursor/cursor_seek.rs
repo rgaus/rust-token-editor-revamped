@@ -366,11 +366,9 @@ impl CursorSeek {
                     };
 
                     match (initial_delimiter, found_delimeter) {
-                        (
-                            Delimiter::End(initial_type, _),
-                            Delimiter::Start(found_type, found_length)
-                        ) if found_type == *initial_type => {
-
+                        | (Delimiter::End(initial_type, _), Delimiter::Start(found_type, found_length))
+                        | (Delimiter::End(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
+                            if found_type == *initial_type => {
                             // found_delimeter is a valid match! This is the end of the match
                             // process. If inclusive though, advance to the start of the found match.
                             if inclusive == Inclusivity::Inclusive {
@@ -380,12 +378,8 @@ impl CursorSeek {
                                 CursorSeek::Stop
                             }
                         },
-                        (Delimiter::End(_, _), _) => {
-                            unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is Delimiter::End! This should be impossible.");
-                        },
-                        (Delimiter::End(_, _), _) => {
-                            // The Seek needs to happen in the other direction to go back to start? hmm
-                            CursorSeek::ChangeDirection(Direction::Backwards)
+                        (initial_delimeter, _) if !matches!(initial_delimeter, Delimiter::End(_, _))=> {
+                            unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is NOT Delimiter::End! This should be impossible.");
                         },
 
                         // The found delimeter doesn't fit with the given traversal, so skip it.
