@@ -1,6 +1,8 @@
 mod node_tree;
 mod languages;
 
+use pancurses::{initscr, endwin, Input, resize_term, noecho, echo, curs_set};
+
 use crate::node_tree::{
     cursor::{Cursor, CursorSeek, Selection},
     node::{
@@ -13,6 +15,93 @@ use crate::node_tree::{
 };
 
 fn main() {
+    let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+        let foo = "brew";
+        function main() {
+            console.log("hello world");
+        }
+
+        function fizbuzz(n) {
+            if (n % 2 == 0) {
+                return "fizz";
+            } else if (n % 3 == 0) {
+                return "buzz";
+            } else {
+                return "fizzbuzz";
+            }
+        }
+    "#);
+    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
+    //     }
+    // "#);
+    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
+    //     }
+    // "#);
+    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed("console.log(123);");
+    // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
+
+    if std::env::var("INTERACTIVE").unwrap_or("".into()) == "true" {
+        let window = initscr();
+        window.printw("Hello Rust");
+        window.keypad(true);
+        noecho();
+
+        window.clear();
+        let (start_y, start_x) = window.get_beg_yx();
+        let (end_y, end_x) = window.get_max_yx();
+        let (width_chars, height_chars) = (end_x - start_x, end_y - start_y);
+
+        // window.draw_box(10, 10);
+
+        let mut cursor = Cursor::new(root.clone());
+        let mut status: String = "".into();
+
+        {
+            let mut selection = cursor.selection();
+            selection.secondary = selection.secondary.seek_forwards(CursorSeek::advance_until_start_end());
+            window.mvaddstr(0, 0, selection.literal());
+        }
+
+        loop {
+            window.mvaddstr(height_chars-1, 0, &status);
+
+            let (rows, cols) = cursor.to_rows_cols();
+            window.mv((rows-1) as i32, (cols-1) as i32);
+            // dbg!(rows, cols);
+
+            window.refresh();
+            match window.getch() {
+                Some(Input::Character(x)) if x == 'q' => break,
+                Some(Input::Character('l')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::AdvanceByCharCount(1));
+                },
+                Some(Input::Character('h')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::AdvanceByCharCount(1));
+                },
+                Some(Input::Character('j')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::AdvanceByLines(1));
+                },
+                Some(Input::Character('k')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::AdvanceByLines(1));
+                },
+                Some(Input::KeyResize) => {
+                    resize_term(0, 0);
+                },
+                _ => (),
+            }
+            status = format!("{:?}", cursor);
+        }
+
+        echo();
+        endwin();
+    }
+
     // let foo = mini_js::parse_string(r#"
     //     {
     //         foo
@@ -109,33 +198,33 @@ fn main() {
     //     }
     // });
 
-    println!("------ ONE ------");
-    let parent = InMemoryNode::<languages::typescript::SyntaxKind>::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
-    InMemoryNode::dump(&parent);
-
-    println!("------");
-    InMemoryNode::insert_child(&parent, InMemoryNode::new_from_literal("NEW!"), 4);
-    InMemoryNode::dump(&parent);
-    println!("------");
-    InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("BLEW!"), 0);
-    InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("YOO"), 0);
-    InMemoryNode::dump(&parent);
-    println!("------");
-
-    // let cur = Cursor::new_at(parent.borrow().children[2].clone(), 0);
-    let cur = Cursor::new_at(parent.clone(), 0);
-    let mut selection = cur.selection();
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
-    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive)));
-    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive)));
-    println!("SELECTION: {selection:?}");
-    selection.delete().unwrap();
-
-    println!("------");
+    // println!("------ ONE ------");
+    // let parent = InMemoryNode::<languages::typescript::SyntaxKind>::new_tree_from_literal_in_chunks("foo:bar baz hello world", 4);
     // InMemoryNode::dump(&parent);
-    println!("{:?}", Selection::new_across_subtree(&parent));
 
-    println!("------ END ONE ------");
+    // println!("------");
+    // InMemoryNode::insert_child(&parent, InMemoryNode::new_from_literal("NEW!"), 4);
+    // InMemoryNode::dump(&parent);
+    // println!("------");
+    // InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("BLEW!"), 0);
+    // InMemoryNode::insert_child(&parent.borrow().children[2].clone(), InMemoryNode::new_from_literal("YOO"), 0);
+    // InMemoryNode::dump(&parent);
+    // println!("------");
+
+    // // let cur = Cursor::new_at(parent.borrow().children[2].clone(), 0);
+    // let cur = Cursor::new_at(parent.clone(), 0);
+    // let mut selection = cur.selection();
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+    // // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive)));
+    // // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive)));
+    // println!("SELECTION: {selection:?}");
+    // selection.delete().unwrap();
+
+    // println!("------");
+    // // InMemoryNode::dump(&parent);
+    // println!("{:?}", Selection::new_across_subtree(&parent));
+
+    // println!("------ END ONE ------");
 
     // let cur = Cursor::new_at(parent, 0);
     // // let cur = Cursor::new(parent);
@@ -179,41 +268,43 @@ fn main() {
 
     // rslint_example::main();
     println!("------ TWO ------");
-    let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
-        let foo = "brew";
-        function main() {
-            console.log("hello world");
-        }
+    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    //     let foo = "brew";
+    //     function main() {
+    //         console.log("hello world");
+    //     }
 
-        function fizbuzz(n) {
-            if (n % 2 == 0) {
-                return "fizz";
-            } else if (n % 3 == 0) {
-                return "buzz";
-            } else {
-                return "fizzbuzz";
-            }
-        }
-    "#);
-    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
-    //     let foo = "brew";
-    //     function main() {
-    //         console.log("hello world");
+    //     function fizbuzz(n) {
+    //         if (n % 2 == 0) {
+    //             return "fizz";
+    //         } else if (n % 3 == 0) {
+    //             return "buzz";
+    //         } else {
+    //             return "fizzbuzz";
+    //         }
     //     }
     // "#);
-    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
-    //     let foo = "brew";
-    //     function main() {
-    //         console.log("hello world");
-    //     }
-    // "#);
-    // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed("console.log(123);");
-    InMemoryNode::dump(&root);
-    // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
+    // // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    // //     let foo = "brew";
+    // //     function main() {
+    // //         console.log("hello world");
+    // //     }
+    // // "#);
+    // // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    // //     let foo = "brew";
+    // //     function main() {
+    // //         console.log("hello world");
+    // //     }
+    // // "#);
+    // // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed("console.log(123);");
+    // InMemoryNode::dump(&root);
+    // // println!("INITIAL: {:?}", Selection::new_across_subtree(&root));
 
     let mut selection = Cursor::new(root.clone()).selection();
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_char_then_stop('}', Newline::Ignore)));
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive)));
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_char_then_stop('}', Newline::Ignore)));
+    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(3)));
+    println!("ROWS COLS: {:?}", selection.primary.to_rows_cols());
+    // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive)));
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(18)));
     // selection.set_secondary(selection.secondary.seek_forwards(CursorSeek::AdvanceByCharCount(9)));
