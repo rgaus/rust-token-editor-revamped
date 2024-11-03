@@ -16,9 +16,10 @@ use std::{
 
 /// An enum used by seek_forwards_until to control how seeking should commence.
 pub enum NodeSeek<Item> {
-    Continue(Item), // Seek to the next token
-    Stop,           // Finish and don't include this token
-    Done(Item),     // Finish and do include this token
+    Continue(Item),                    // Seek to the next token
+    Stop,                              // Finish and don't include this token
+    Done(Item),                        // Finish and do include this token
+    ChangeDirection(Item, Direction),  // "Continue" the current node, and then switch direction
 }
 
 pub trait TokenKindTrait: Clone + Debug + PartialEq {
@@ -951,17 +952,101 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
     pub fn seek_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
-        direction: Direction,
+        initial_direction: Direction,
         current_node_included: Inclusivity,
-        until_fn: UntilFn,
+        mut until_fn: UntilFn,
     ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
-        match direction {
-            Direction::Forwards => Self::seek_forwards_until(node, current_node_included, until_fn),
-            Direction::Backwards => Self::seek_backwards_until(node, current_node_included, until_fn),
+        let mut direction = initial_direction;
+
+        let cursor = match (current_node_included, direction) {
+            (Inclusivity::Inclusive, _direction) => Some(node.clone()),
+            (Inclusivity::Exclusive, Direction::Forwards) => node.borrow().next.as_ref().map(|n| n.upgrade()).flatten(),
+            (Inclusivity::Exclusive, Direction::Backwards) => node.borrow().previous.as_ref().map(|n| n.upgrade()).flatten(),
+        };
+        let Some(mut cursor) = cursor else {
+            // The cursor node is None, so bail early!
+            return (vec![]).into_iter();
+        };
+
+        let mut output = vec![];
+        let mut iteration_counter: usize = 0;
+        loop {
+            match (until_fn(&cursor, iteration_counter), direction) {
+                (NodeSeek::Continue(result), Direction::Forwards) => {
+                    // Continue looping to the next node!
+                    output.push(result);
+
+                    let cursor_next = cursor.borrow().next.as_ref().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_next) = cursor_next else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_next;
+                    iteration_counter += 1;
+                    continue;
+                }
+                (NodeSeek::Continue(result), Direction::Backwards) => {
+                    // Continue looping to the next node!
+                    output.push(result);
+
+                    let cursor_next = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_next) = cursor_next else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_next;
+                    iteration_counter += 1;
+                    continue;
+                }
+                (NodeSeek::Stop, _direction) => {
+                    break;
+                }
+                (NodeSeek::Done(result), _direction) => {
+                    output.push(result);
+                    break;
+                }
+                (NodeSeek::ChangeDirection(result, Direction::Backwards), Direction::Forwards) => {
+                    direction = Direction::Backwards;
+
+                    // Continue looping to the previous node!
+                    output.push(result);
+
+                    let cursor_previous = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_previous) = cursor_previous else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_previous;
+                    iteration_counter += 1;
+                    continue;
+                },
+                (NodeSeek::ChangeDirection(result, Direction::Forwards), Direction::Backwards) => {
+                    direction = Direction::Forwards;
+
+                    // Continue looping to the next node!
+                    output.push(result);
+
+                    let cursor_next = cursor.borrow().next.as_ref().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_next) = cursor_next else {
+                        // We've reached the end!
+                        break;
+                    };
+
+                    cursor = cursor_next;
+                    iteration_counter += 1;
+                    continue;
+                },
+                (NodeSeek::ChangeDirection(_, _), _) => { continue; },
+            }
         }
+
+        output.into_iter()
     }
 
     /// Given a starting node `node`, seek forwards via next, calling `until_fn` repeatedly for
@@ -975,49 +1060,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn seek_forwards_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
         current_node_included: Inclusivity,
-        mut until_fn: UntilFn,
-    ) -> std::vec::IntoIter<ResultItem>
+        until_fn: UntilFn,
+    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
-        let cursor = match current_node_included {
-            Inclusivity::Inclusive => Some(node.clone()),
-            Inclusivity::Exclusive => node.borrow().next.clone().map(|n| n.upgrade()).flatten(),
-        };
-        let Some(mut cursor) = cursor else {
-            // The cursor node is None, so bail early!
-            return (vec![]).into_iter();
-        };
-
-        let mut output = vec![];
-        let mut iteration_counter: usize = 0;
-        loop {
-            match until_fn(&cursor, iteration_counter) {
-                NodeSeek::Continue(result) => {
-                    // Continue looping to the next node!
-                    output.push(result);
-
-                    let cursor_next = cursor.borrow().next.clone().map(|n| n.upgrade()).flatten();
-                    let Some(cursor_next) = cursor_next else {
-                        // We've reached the end!
-                        break;
-                    };
-
-                    cursor = cursor_next;
-                    iteration_counter += 1;
-                    continue;
-                }
-                NodeSeek::Stop => {
-                    break;
-                }
-                NodeSeek::Done(result) => {
-                    output.push(result);
-                    break;
-                }
-            }
-        }
-
-        output.into_iter()
+        Self::seek_until(node, Direction::Forwards, current_node_included, until_fn)
     }
 
     /// Given a starting node `node`, seek backwards via previous, calling `until_fn` repeatedly for
@@ -1031,49 +1079,13 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn seek_backwards_until<UntilFn, ResultItem>(
         node: &Rc<RefCell<Self>>,
         current_node_included: Inclusivity,
-        mut until_fn: UntilFn,
-    ) -> std::vec::IntoIter<ResultItem>
+        until_fn: UntilFn,
+    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
+    // ) -> std::vec::IntoIter<ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
-        let cursor = match current_node_included {
-            Inclusivity::Inclusive => Some(node.clone()),
-            Inclusivity::Exclusive => node.borrow().previous.clone().map(|n| n.upgrade()).flatten(),
-        };
-        let Some(mut cursor) = cursor else {
-            // The cursor node is None, so bail early!
-            return (vec![]).into_iter();
-        };
-
-        let mut output = vec![];
-        let mut iteration_counter: usize = 0;
-        loop {
-            match until_fn(&cursor, iteration_counter) {
-                NodeSeek::Continue(result) => {
-                    // Continue looping to the previous node!
-                    output.push(result);
-
-                    let cursor_previous = cursor.borrow().previous.clone().map(|n| n.upgrade()).flatten();
-                    let Some(cursor_previous) = cursor_previous else {
-                        // We've reached the end!
-                        break;
-                    };
-
-                    cursor = cursor_previous;
-                    iteration_counter += 1;
-                    continue;
-                }
-                NodeSeek::Stop => {
-                    break;
-                }
-                NodeSeek::Done(result) => {
-                    output.push(result);
-                    break;
-                }
-            }
-        }
-
-        output.into_iter()
+        Self::seek_until(node, Direction::Backwards, current_node_included, until_fn)
     }
 
     /// Given a starting node `start_node`, delete from that node the the next node and onwards,
@@ -1095,6 +1107,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 NodeSeek::Continue(value) => NodeSeek::Continue((node.clone(), value)),
                 NodeSeek::Done(value) => NodeSeek::Done((node.clone(), value)),
                 NodeSeek::Stop => NodeSeek::Stop,
+                NodeSeek::ChangeDirection(_, _) => unimplemented!("NodeSeek::ChangeDirection makes no sense in the context of InMemoryNode::remove_nodes_sequentially_until!")
             }
         });
 

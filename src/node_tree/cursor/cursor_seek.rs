@@ -23,7 +23,6 @@ pub enum CursorSeek {
         until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
     },
     ChangeDirection(Direction), // Change to seeking in the given direction
-    SwitchDirection,            // If seeking forwards, now seek backwards, and vice versa
 }
 
 impl CursorSeek {

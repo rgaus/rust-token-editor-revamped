@@ -120,6 +120,8 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         let _ = InMemoryNode::seek_until(&self.node, direction, Inclusivity::Inclusive, |node, ct| {
             new_node = node.clone();
 
+            let direction_at_start_of_node = direction.clone();
+
             let node_literal = InMemoryNode::literal(node);
             let mut characters = if ct == 0 {
                 // If this is the first node, skip forward / backward `self.offset` times.
@@ -321,13 +323,6 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             direction = new_direction;
                             continue;
                         },
-                        CursorSeek::SwitchDirection => {
-                            direction = match direction {
-                                Direction::Forwards => Direction::Backwards,
-                                Direction::Backwards => Direction::Forwards,
-                            };
-                            continue;
-                        },
                     }
                     if !advance_until_fn_stack.is_empty()
                         || !advance_until_char_counter_stack.is_empty()
@@ -399,17 +394,17 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         direction = new_direction;
                         continue;
                     },
-                    CursorSeek::SwitchDirection => {
-                        direction = match direction {
-                            Direction::Forwards => Direction::Backwards,
-                            Direction::Backwards => Direction::Forwards,
-                        };
-                        continue;
-                    },
                 }
             }
 
-            NodeSeek::Continue(())
+            // The whole node has been parsed! If the direction changed half way through though
+            // then change the node seek direction so that the correct node in the proper direction
+            // is selected next.
+            if direction_at_start_of_node != direction {
+                NodeSeek::ChangeDirection((), direction)
+            } else {
+                NodeSeek::Continue(())
+            }
         });
 
         Self::new_at(new_node, new_offset)

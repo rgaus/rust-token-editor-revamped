@@ -4,7 +4,7 @@ pub enum Inclusivity {
     Exclusive,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Forwards,
     Backwards,
