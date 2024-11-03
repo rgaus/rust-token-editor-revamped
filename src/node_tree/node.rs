@@ -22,6 +22,10 @@ pub enum NodeSeek<Item> {
     ChangeDirection(Item, Direction),  // "Continue" the current node, and then switch direction
 }
 
+/// A trait that any new language definition must implement, which tells the system how to properly
+/// parse and understand ASTs generated for that language.
+///
+/// An implementer of this trait is expected to be an enum of all possible token types.
 pub trait TokenKindTrait: Clone + Debug + PartialEq {
     // TODO: add logic to handle setting effects
 
