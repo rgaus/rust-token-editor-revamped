@@ -60,7 +60,7 @@ fn main() {
         // window.draw_box(10, 10);
 
         let mut cursor = Cursor::new(root.clone());
-        let mut status: String = "".into();
+        let mut status: String;
 
         {
             let mut selection = cursor.selection();
@@ -69,15 +69,19 @@ fn main() {
         }
 
         loop {
+            let (rows, cols) = cursor.to_rows_cols();
+
+            status = format!("({rows}, {cols}) {:?}", cursor);
             window.mvaddstr(height_chars-1, 0, &status);
 
-            let (rows, cols) = cursor.to_rows_cols();
             window.mv((rows-1) as i32, (cols-1) as i32);
             // dbg!(rows, cols);
 
             window.refresh();
             match window.getch() {
+                Some(Input::KeyResize) => { resize_term(0, 0); },
                 Some(Input::Character(x)) if x == 'q' => break,
+
                 Some(Input::Character('l')) => {
                     cursor = cursor.seek_forwards(CursorSeek::AdvanceByCharCount(1));
                 },
@@ -90,12 +94,34 @@ fn main() {
                 Some(Input::Character('k')) => {
                     cursor = cursor.seek_backwards(CursorSeek::AdvanceByLines(1));
                 },
-                Some(Input::KeyResize) => {
-                    resize_term(0, 0);
+                Some(Input::Character('w')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive));
+                },
+                Some(Input::Character('b')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive));
+                },
+
+                Some(Input::Character('%')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive));
+                },
+
+                Some(Input::Character('0')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::advance_until_line_start());
+                },
+                Some(Input::Character('^')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::advance_until_line_start_after_leading_whitespace());
+                },
+                Some(Input::Character('$')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::advance_until_line_end(Inclusivity::Exclusive));
+                },
+                Some(Input::Character('G')) => {
+                    cursor = cursor.seek_forwards(CursorSeek::advance_until_start_end());
+                },
+                Some(Input::Character('g')) => {
+                    cursor = cursor.seek_backwards(CursorSeek::advance_until_start_end());
                 },
                 _ => (),
             }
-            status = format!("{:?}", cursor);
         }
 
         echo();
