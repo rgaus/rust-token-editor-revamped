@@ -287,6 +287,29 @@ impl CursorSeek {
         })
     }
 
+    /// When called, advance backwards to the start of the line.
+    ///
+    /// NOTE: ONLY WORKS WHEN SEEKING BACKWARDS!
+    pub fn advance_until_line_start_after_leading_whitespace() -> Self {
+        let mut hit_start_of_line = false;
+        CursorSeek::advance_until_only(Direction::Backwards, move |c, _i| {
+            if !hit_start_of_line {
+                if c != *NEWLINE {
+                    CursorSeek::Continue
+                } else {
+                    hit_start_of_line = true;
+                    CursorSeek::ChangeDirection(Direction::Forwards)
+                }
+            } else {
+                if c.is_whitespace() {
+                    CursorSeek::Continue
+                } else {
+                    CursorSeek::Stop
+                }
+            }
+        })
+    }
+
     /// When called, advanced to the start or end of a document
     pub fn advance_until_start_end() -> Self {
         CursorSeek::advance_until(|_c, _i| CursorSeek::Continue)
