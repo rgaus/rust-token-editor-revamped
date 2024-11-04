@@ -258,7 +258,7 @@ impl CursorSeek {
         })
     }
 
-    /// When called, advance forwards to the start of the line.
+    /// When called, advance forwards to the start of the line - this implements '$'!
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING FORWARDS!
     pub fn advance_until_line_end(inclusive: Inclusivity) -> Self {
@@ -274,7 +274,7 @@ impl CursorSeek {
         })
     }
 
-    /// When called, advance backwards to the start of the line.
+    /// When called, advance backwards to the start of the line - this implements '0'!
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING BACKWARDS!
     pub fn advance_until_line_start() -> Self {
@@ -287,7 +287,8 @@ impl CursorSeek {
         })
     }
 
-    /// When called, advance backwards to the start of the line.
+    /// When called, advance backwards to the start of the line, not taking into account leading
+    /// whitespace - this implements '^'!
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING BACKWARDS!
     pub fn advance_until_line_start_after_leading_whitespace() -> Self {
@@ -295,12 +296,15 @@ impl CursorSeek {
         CursorSeek::advance_until_only(Direction::Backwards, move |c, _i| {
             if !hit_start_of_line {
                 if c != *NEWLINE {
+                    // 1. Seek backwards until the newline boundary is hit
                     CursorSeek::Continue
                 } else {
+                    // 2. Newline was hit, now start seeking forward
                     hit_start_of_line = true;
                     CursorSeek::ChangeDirection(Direction::Forwards)
                 }
             } else {
+                // 3. Stop seeking forward once the first non-whitespace char is hit
                 if c.is_whitespace() {
                     CursorSeek::Continue
                 } else {
