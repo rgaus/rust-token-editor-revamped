@@ -1,7 +1,20 @@
+use super::cursor::CursorSeek;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Inclusivity {
     Inclusive,
     Exclusive,
+}
+
+impl Inclusivity {
+    /// Converts a given Inclusivity value into the CursorSeek that would be used
+    /// at the end of a seek of that type of inclusivity.
+    pub fn to_cursor_seek(&self) -> CursorSeek {
+        match self {
+            Inclusivity::Inclusive => CursorSeek::Done,
+            Inclusivity::Exclusive => CursorSeek::Stop,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -88,52 +88,80 @@ impl CursorSeek {
         // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
         // is also considered to be a word.
         CursorSeek::advance_until(move |c, _i| {
-            let final_seek = final_seek.clone();
+            let a = match &mode {
+                Mode::Initial => {
+                    if is_lower_word_char(c) {
+                        mode = Mode::HitFirstLowerWordChar;
+                        CursorSeek::Continue
+                    } else if c == *NEWLINE || c.is_whitespace() {
+                        mode = Mode::SeekingThroughLeadingWhitespace;
+                        CursorSeek::Continue
+                    } else {
+                        mode = Mode::SeekingThroughLeadingNonLowerWordChars;
+                        CursorSeek::Continue
+                    }
+                },
+                Mode::HitFirstLowerWordChar => {
+                    if is_lower_word_char(c) {
+                        // If a word character, keep going
+                        CursorSeek::Continue
+                    } else {
+                        Inclusivity::to_cursor_seek(&inclusive)
+                    }
+                },
+                Mode::SeekingThroughLeadingWhitespace | Mode::SeekingThroughLeadingNonLowerWordChars => {
+                    if c.is_whitespace() {
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Stop
+                    }
+                },
+            };
 
-            // set iskeyword? @,48-57,_,192-255
-            if is_lower_word_char(c) {
-                // If a word character, keep going
-                hit_word_char = true;
-                CursorSeek::Continue
-            } else if !hit_word_char && c == '\n' {
-                // If a newling, then advance until whitespace after that new line stops
-                CursorSeek::advance_until(move |c, _i| {
-                    if c.is_whitespace() {
-                        CursorSeek::Continue
-                    } else {
-                        CursorSeek::Stop
-                    }
-                })
-            } else if !hit_word_char && c.is_whitespace() {
-                // If whitespace, then advance until the whitespace finishes, then resume the word
-                // checking logic
-                CursorSeek::advance_until(move |c, _i| {
-                    if c.is_whitespace() {
-                        CursorSeek::Continue
-                    } else {
-                        CursorSeek::Stop
-                    }
-                })
-            } else {
-                final_seek.clone()
-            }
+            a
+        //     if stop {
+        //         CursorSeek::Stop
+
+        //     // set iskeyword? @,48-57,_,192-255
+        //     } else if is_lower_word_char(c) {
+        //         // If a word character, keep going
+        //         hit_word_char = true;
+        //         CursorSeek::Continue
+        //     } else if !hit_word_char && c == '\n' {
+        //         // If a newline, then advance until whitespace after that new line stops
+        //         CursorSeek::advance_until(move |c, _i| {
+        //             if c.is_whitespace() {
+        //                 CursorSeek::Continue
+        //             } else {
+        //                 CursorSeek::Stop
+        //             }
+        //         })
+        //     } else if !hit_word_char && c.is_whitespace() {
+        //         println!("HERE");
+        //         // If whitespace, then advance until the whitespace finishes, then resume the word
+        //         // checking logic
+        //         let seek_result = CursorSeek::advance_until(move |c, _i| {
+        //             if c.is_whitespace() {
+        //                 CursorSeek::Continue
+        //             } else {
+        //                 CursorSeek::Stop
+        //             }
+        //         });
+        //         stop = true;
+        //         seek_result
+        //     } else {
+        //         final_seek.clone()
+        //     }
         })
     }
 
     pub fn advance_upper_word(inclusive: Inclusivity) -> Self {
-        let final_seek = match inclusive {
-            Inclusivity::Inclusive => CursorSeek::Done,
-            Inclusivity::Exclusive => CursorSeek::Stop,
-        };
-
         let mut hit_word_char = false;
 
         // From :h WORD -
         // A WORD consists of a sequence of non-blank characters, separated with white
         // space.  An empty line is also considered to be a WORD.
         CursorSeek::advance_until(move |c, _i| {
-            let final_seek = final_seek.clone();
-
             if is_upper_word_char(c) {
                 // If a word character, keep going
                 hit_word_char = true;
@@ -157,7 +185,7 @@ impl CursorSeek {
                     }
                 })
             } else {
-                final_seek.clone()
+                Inclusivity::to_cursor_seek(&inclusive)
             }
         })
     }
@@ -264,10 +292,7 @@ impl CursorSeek {
     pub fn advance_until_line_end(inclusive: Inclusivity) -> Self {
         CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
             if c == *NEWLINE {
-                match inclusive {
-                    Inclusivity::Inclusive => CursorSeek::Done,
-                    Inclusivity::Exclusive => CursorSeek::Stop,
-                }
+                Inclusivity::to_cursor_seek(&inclusive)
             } else {
                 CursorSeek::Continue
             }
