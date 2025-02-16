@@ -316,6 +316,42 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         }
     }
 
+    /// Starting at the given node, trace the `.next` links through the whole node sequence until
+    /// the end, looking for discontinuities and cycles.
+    ///
+    /// This is a debugging tool and not meant to be used in actual editor operation.
+    pub fn dump_trace(node: &Rc<RefCell<Self>>) {
+        println!("--- TRACE START ---");
+        let mut ancestry = vec![];
+        let mut pointer = Some(node.clone());
+        while let Some(pointer_unwrapped) = pointer {
+            print!("{:?} -> ", pointer_unwrapped.borrow().metadata);
+
+            let ancestry_index = ancestry.iter().position(|n: &Rc<RefCell<Self>>| *n == pointer_unwrapped);
+            if let Some(ancestry_index) = ancestry_index {
+                println!("CYCLE!");
+                println!("CYCLE FOUND:");
+                for index in ancestry_index..ancestry.len() {
+                    let node = ancestry[index].clone();
+                    if index == ancestry_index {
+                        println!("{}.\t+--> {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
+                    } else if index == ancestry.len()-1 {
+                        println!("{}.\t+--- {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
+                    } else {
+                        println!("{}.\t|    {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
+                    }
+                }
+                break;
+            }
+
+            pointer = pointer_unwrapped.borrow().next.as_ref().map(|n| n.upgrade()).flatten();
+            ancestry.push(pointer_unwrapped);
+        }
+        println!("DONE!");
+        println!("");
+        println!("--- TRACE END ---");
+    }
+
     pub fn literal(node: &Rc<RefCell<Self>>) -> String {
         match node.borrow().metadata.clone() {
             NodeMetadata::Literal(literal) => literal,
