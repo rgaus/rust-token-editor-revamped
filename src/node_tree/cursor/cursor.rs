@@ -85,6 +85,26 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         (row_counter, col_counter)
     }
 
+    pub fn to_cols(self: &Self) -> usize {
+        let mut col_counter = 1;
+
+        let _ = self.seek_backwards_until(|c, _i| {
+            if c == *NEWLINE {
+                CursorSeek::Stop
+            } else {
+                // Before reaching the first newline, count the col chars
+                col_counter += 1;
+                CursorSeek::Continue
+            }
+        });
+
+        col_counter
+    }
+
+    pub fn to_rows(self: &Self) -> usize {
+        self.to_rows_cols().0
+    }
+
     /// When called, seeks starting at the cursor position character by character through the node
     /// structure in the giren `direction` until the given `until_fn` returns either `Stop` or `Done`.
     pub fn seek_until<UntilFn>(self: &Self, initial_direction: Direction, mut until_fn: UntilFn) -> Self
