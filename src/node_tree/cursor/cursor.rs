@@ -24,6 +24,31 @@ impl<TokenKind: TokenKindTrait> Debug for Cursor<TokenKind> {
     }
 }
 
+impl<TokenKind: TokenKindTrait> PartialEq for Cursor<TokenKind> {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node && self.offset == other.offset
+    }
+}
+
+impl<TokenKind: TokenKindTrait> PartialOrd for Cursor<TokenKind> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.node < other.node {
+            Some(std::cmp::Ordering::Less)
+        } else if self.node > other.node {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            // Nodes must be the same! So, compare offsets:
+            if self.offset < other.offset {
+                Some(std::cmp::Ordering::Less)
+            } else if self.offset > other.offset {
+                Some(std::cmp::Ordering::Greater)
+            } else {
+                Some(std::cmp::Ordering::Equal)
+            }
+        }
+    }
+}
+
 impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     pub fn new(node: Rc<RefCell<InMemoryNode<TokenKind>>>) -> Self {
         Self::new_at(node, 0)
