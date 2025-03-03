@@ -1046,13 +1046,13 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                     // Continue looping to the next node!
                     output.push(result);
 
-                    let cursor_next = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
-                    let Some(cursor_next) = cursor_next else {
+                    let cursor_previous = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
+                    let Some(cursor_previous) = cursor_previous else {
                         // We've reached the end!
                         break;
                     };
 
-                    cursor = cursor_next;
+                    cursor = cursor_previous;
                     iteration_counter += 1;
                     continue;
                 }
