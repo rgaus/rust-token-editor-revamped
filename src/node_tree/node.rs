@@ -320,8 +320,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// the end, looking for discontinuities and cycles.
     ///
     /// This is a debugging tool and not meant to be used in actual editor operation.
-    pub fn dump_trace(node: &Rc<RefCell<Self>>) {
-        println!("--- TRACE START ---");
+    pub fn dump_trace(node: &Rc<RefCell<Self>>, direction: Direction) {
+        if direction == Direction::Forwards {
+            println!("--- FORWARDS TRACE START ---");
+        } else {
+            println!("--- BACKWARDS TRACE START ---");
+        }
         let mut ancestry = vec![];
         let mut pointer = Some(node.clone());
         while let Some(pointer_unwrapped) = pointer {
@@ -344,12 +348,21 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 break;
             }
 
-            pointer = pointer_unwrapped.borrow().next.as_ref().map(|n| n.upgrade()).flatten();
+            pointer = match direction {
+                Direction::Forwards => pointer_unwrapped.borrow().next.clone(),
+                Direction::Backwards => pointer_unwrapped.borrow().previous.clone(),
+            }.as_ref().map(|n| n.upgrade()).flatten();
             ancestry.push(pointer_unwrapped);
         }
+
         println!("DONE!");
         println!("");
-        println!("--- TRACE END ---");
+
+        if direction == Direction::Forwards {
+            println!("--- FORWARDS TRACE END ---");
+        } else {
+            println!("--- BACKWARDS TRACE END ---");
+        }
     }
 
     pub fn literal(node: &Rc<RefCell<Self>>) -> String {
