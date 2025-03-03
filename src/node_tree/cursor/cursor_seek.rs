@@ -79,6 +79,14 @@ impl CursorSeek {
             Inclusivity::Inclusive => CursorSeek::Done,
             Inclusivity::Exclusive => CursorSeek::Stop,
         };
+        #[derive(Debug)]
+        enum Mode {
+            Initial,
+            HitFirstLowerWordChar,
+            SeekingThroughLeadingNonLowerWordChars,
+            SeekingThroughLeadingWhitespace,
+        }
+        let mut mode = Mode::Initial;
 
         let mut hit_word_char = false;
 
