@@ -26,6 +26,7 @@ pub enum CursorSeek {
 pub struct CursorSeekContext {
     pub direction: Direction,
     pub index: usize,
+    pub is_at_end_of_line: bool,
 }
 
 impl CursorSeek {
@@ -75,8 +76,12 @@ impl CursorSeek {
         })
     }
 
-    // ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L361
-    pub fn forwards_word(is_big_word: bool) -> Self {
+    /// forwards_word(count, is_big_word, is_eol) - move forward `count` words
+    ///
+    /// If is_eol is TRUE, last word stops at end of line (for operators).
+    ///
+    /// ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L361
+    pub fn forwards_word(count: usize, is_big_word: bool, _is_eol: bool) -> Self {
         #[derive(Debug)]
         enum Mode {
             Initial,
@@ -84,6 +89,7 @@ impl CursorSeek {
             Two,
         }
         let mut mode = Mode::Initial;
+        let mut loop_count = count;
 
         // From :h word -
         // A word consists of a sequence of letters, digits and underscores, or a
@@ -142,7 +148,15 @@ impl CursorSeek {
 
                     if current_class == 0 {
                         println!("space char!");
-                        CursorSeek::Done
+
+                        // Loop around again if there are still iterations to go
+                        loop_count -= 1;
+                        if loop_count > 0 {
+                            mode = Mode::Initial;
+                            CursorSeek::Continue
+                        } else {
+                            CursorSeek::Done
+                        }
                     } else {
                         CursorSeek::Continue
                     }
@@ -151,8 +165,11 @@ impl CursorSeek {
         })
     }
 
-    // ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L431
-    pub fn back_word(is_big_word: bool, stop: bool) -> Self {
+    /// back_word() - move backward 1 word
+    /// If stop is TRUE and we are already on the start of a word, move one less.
+    ///
+    /// ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L431
+    pub fn back_word(count: usize, is_big_word: bool, stop: bool) -> Self {
         #[derive(Debug)]
         enum Mode {
             Initial,
@@ -163,6 +180,8 @@ impl CursorSeek {
             Five,
         }
         let mut mode = Mode::Initial;
+        let mut loop_count = count;
+        let mut stop_value = stop;
 
         // From :h word -
         // A word consists of a sequence of letters, digits and underscores, or a
@@ -183,7 +202,7 @@ impl CursorSeek {
                     let current_class = vim_cls(c, is_big_word);
 
                     println!("1. c={c} starting_class={starting_class:?} current_class={current_class:?}");
-                    if !stop || *starting_class == current_class || *starting_class == 0 {
+                    if !stop_value || *starting_class == current_class || *starting_class == 0 {
                         // if (curwin->w_cursor.col == 0
                         //               && LINEEMPTY(curwin->w_cursor.lnum))
                         //     goto finished;
@@ -249,7 +268,17 @@ impl CursorSeek {
                 }
                 Mode::Five => {
                     println!("5. c={c}");
-                    CursorSeek::Done
+
+                    stop_value = false;
+
+                    // Loop around again if there are still iterations to go
+                    loop_count -= 1;
+                    if loop_count > 0 {
+                        mode = Mode::Initial;
+                        CursorSeek::AdvanceByCharCount(1)
+                    } else {
+                        CursorSeek::Done
+                    }
                 }
             }
         })

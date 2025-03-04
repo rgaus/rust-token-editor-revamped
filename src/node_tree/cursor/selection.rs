@@ -488,7 +488,7 @@ mod tests {
 
         // Forwards one word INCLUSIVE
         let mut selection = selection.perform_inclusive(move |primary, secondary| {
-            let primary = primary.seek_forwards(CursorSeek::forwards_word(false));
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(1, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 7));
@@ -497,7 +497,7 @@ mod tests {
 
         // Forwards one word EXCLUSIVE
         let mut selection = selection.perform_exclusive(move |primary, secondary| {
-            let primary = primary.seek_forwards(CursorSeek::forwards_word(false));
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(1, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 14));
@@ -508,9 +508,9 @@ mod tests {
         println!("------");
         let mut selection = selection.perform_inclusive(move |primary, secondary| {
             let primary = primary
-                .seek_forwards(CursorSeek::forwards_word(false))
-                .seek_forwards(CursorSeek::forwards_word(false))
-                .seek_forwards(CursorSeek::forwards_word(false));
+                .seek_forwards(CursorSeek::forwards_word(1, false, false))
+                .seek_forwards(CursorSeek::forwards_word(1, false, false))
+                .seek_forwards(CursorSeek::forwards_word(1, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 29));
@@ -521,8 +521,8 @@ mod tests {
         println!("------");
         let mut selection = selection.perform_exclusive(move |primary, secondary| {
             let primary = primary
-                .seek_forwards(CursorSeek::forwards_word(false))
-                .seek_forwards(CursorSeek::forwards_word(false));
+                .seek_forwards(CursorSeek::forwards_word(1, false, false))
+                .seek_forwards(CursorSeek::forwards_word(1, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 53));
@@ -553,7 +553,7 @@ mod tests {
         println!("------");
         // Backwards one word INCLUSIVE
         let mut selection = selection.perform_inclusive(move |primary, secondary| {
-            let primary = primary.seek_backwards(CursorSeek::back_word(false, false));
+            let primary = primary.seek_backwards(CursorSeek::back_word(1, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.literal(), "adipiscing e");

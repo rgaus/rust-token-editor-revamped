@@ -70,10 +70,10 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
                 cursor = cursor.seek_backwards(CursorSeek::AdvanceByLines(1));
             }
             Some(Input::Character('w')) => {
-                cursor = cursor.seek_forwards(CursorSeek::forwards_word(false));
+                cursor = cursor.seek_forwards(CursorSeek::forwards_word(1, false, false));
             }
             Some(Input::Character('b')) => {
-                cursor = cursor.seek_backwards(CursorSeek::forwards_word(false));
+                cursor = cursor.seek_backwards(CursorSeek::back_word(1, false, false));
             }
 
             Some(Input::Character('%')) => {

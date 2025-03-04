@@ -127,10 +127,10 @@ pub fn vim_cls(c: char, cls_bigword: bool) -> VimClass {
     //     } else {
     //         c
     //     }
-    } else if (cls_bigword) {
+    } else if cls_bigword {
         // If cls_bigword is TRUE, report all non-blanks as class 1.
         1
-    } else if (is_lower_word_char(c)) {
+    } else if is_lower_word_char(c) {
         2
     } else {
         1

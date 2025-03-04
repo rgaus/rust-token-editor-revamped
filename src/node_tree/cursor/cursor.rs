@@ -334,6 +334,13 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                                 CursorSeekContext {
                                     direction,
                                     index: *advance_until_char_counter,
+                                    is_at_end_of_line: {
+                                        let next_char = match direction {
+                                            Direction::Forwards => characters.front(),
+                                            Direction::Backwards => characters.back(),
+                                        };
+                                        next_char.map_or(false, |next_char| next_char == NEWLINE)
+                                    }
                                 },
                             )
                         };
