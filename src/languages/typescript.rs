@@ -1,9 +1,11 @@
-use std::{rc::Rc, cell::RefCell};
+use std::{cell::RefCell, rc::Rc};
 
-use rslint_parser::{parse_text, SyntaxNode, WalkEvent, NodeOrToken, SyntaxKind as SyntaxKindGlobal};
 use colored::{ColoredString, Colorize};
+use rslint_parser::{
+    parse_text, NodeOrToken, SyntaxKind as SyntaxKindGlobal, SyntaxNode, WalkEvent,
+};
 
-use crate::node_tree::node::{TokenKindTrait, InMemoryNode, NodeMetadata};
+use crate::node_tree::node::{InMemoryNode, NodeMetadata, TokenKindTrait};
 
 /// rslint_parser::SyntaxKind is an enum from rslint_parser (javascript parser) which contains all
 /// output tokens. It has been re-exported from rslint_parser::SyntaxKind here.
@@ -12,7 +14,9 @@ use crate::node_tree::node::{TokenKindTrait, InMemoryNode, NodeMetadata};
 /// a generic parameter to InMemoryNode (which allows InMemoryNode to store nodes of this type)
 pub type SyntaxKind = SyntaxKindGlobal;
 
-pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<RefCell<InMemoryNode<SyntaxKind>>> {
+pub fn convert_rslint_syntaxnode_to_inmemorynode(
+    syntax_node: SyntaxNode,
+) -> Rc<RefCell<InMemoryNode<SyntaxKind>>> {
     // let node_literal = match syntax_node.kind() {
     //     rslint_parser::SyntaxKind::TOMBSTONE => format!("TOMBSTONE {:?}", syntax_node.text()),
     //     rslint_parser::SyntaxKind::EOF => format!("EOF {:?}", syntax_node.text()),
@@ -343,15 +347,26 @@ pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<
 
                 // Remove literal text from parent nodes that is replicated in the child node
                 let parent_metadata = pointer.borrow().metadata.clone();
-                if let NodeMetadata::AstNode{ kind, literal: Some(pointer_literal) } = parent_metadata {
+                if let NodeMetadata::AstNode {
+                    kind,
+                    literal: Some(pointer_literal),
+                } = parent_metadata
+                {
                     let new_literal = if pointer_literal.starts_with(&child_literal) {
-                        pointer_literal.chars().skip(child_literal.len()).collect::<String>()
+                        pointer_literal
+                            .chars()
+                            .skip(child_literal.len())
+                            .collect::<String>()
                     } else {
                         pointer_literal
                     };
                     pointer.borrow_mut().metadata = NodeMetadata::AstNode {
                         kind,
-                        literal: if new_literal.is_empty() { None } else { Some(new_literal) },
+                        literal: if new_literal.is_empty() {
+                            None
+                        } else {
+                            Some(new_literal)
+                        },
                     };
                 }
 
@@ -365,7 +380,7 @@ pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<
                 }
 
                 level -= 1;
-            },
+            }
         }
     }
     assert_eq!(level, 0);
@@ -380,7 +395,10 @@ pub fn convert_rslint_syntaxnode_to_inmemorynode(syntax_node: SyntaxNode) -> Rc<
 }
 
 impl TokenKindTrait for SyntaxKind {
-    fn apply_debug_syntax_color(text: String, mut ancestry: std::vec::IntoIter<SyntaxKind>) -> ColoredString {
+    fn apply_debug_syntax_color(
+        text: String,
+        mut ancestry: std::vec::IntoIter<SyntaxKind>,
+    ) -> ColoredString {
         let (Some(kind), Some(parent_kind)) = (ancestry.next(), ancestry.next()) else {
             return text.into();
         };
@@ -709,7 +727,10 @@ impl TokenKindTrait for SyntaxKind {
         matches!(self, SyntaxKind::SCRIPT | SyntaxKind::EXPR_STMT)
     }
 
-    fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>> {
+    fn parse(
+        literal: &str,
+        parent: Option<Rc<RefCell<InMemoryNode<Self>>>>,
+    ) -> Rc<RefCell<InMemoryNode<Self>>> {
         let parse = parse_text(literal, 0);
         // The untyped syntax node of `foo.bar[2]`, the root node is `Script`.
         let untyped_expr_node = parse.syntax();
@@ -728,7 +749,10 @@ impl TokenKindTrait for SyntaxKind {
         //       - D
         //       - E
         //       - F
-        if let Some(NodeMetadata::AstNode { kind: parent_kind, .. }) = parent.as_ref().map(|n| n.borrow().metadata.clone()) {
+        if let Some(NodeMetadata::AstNode {
+            kind: parent_kind, ..
+        }) = parent.as_ref().map(|n| n.borrow().metadata.clone())
+        {
             let mut pointer = root.clone();
             while {
                 if pointer.borrow().children.len() != 1 {
@@ -739,7 +763,13 @@ impl TokenKindTrait for SyntaxKind {
                     false
                 }
             } {
-                let Some(first_child) = pointer.borrow().first_child.as_ref().map(|n| n.upgrade()).flatten() else {
+                let Some(first_child) = pointer
+                    .borrow()
+                    .first_child
+                    .as_ref()
+                    .map(|n| n.upgrade())
+                    .flatten()
+                else {
                     // Traversal downwards is no longer possible, but a matching AstNode kind has
                     // not been found.
                     //

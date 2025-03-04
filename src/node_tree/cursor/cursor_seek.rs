@@ -1,23 +1,17 @@
 use crate::node_tree::utils::{
-    Inclusivity,
-    is_lower_word_char,
-    is_upper_word_char,
-    Newline,
-    NEWLINE,
-    is_delimiter,
-    Delimiter,
-    Direction, DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS, vim_cls, VimClass,
+    is_delimiter, is_lower_word_char, is_upper_word_char, vim_cls, Delimiter, Direction,
+    Inclusivity, Newline, VimClass, DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS, NEWLINE,
 };
 use std::{cell::RefCell, rc::Rc};
 
 // An enum used by seek_forwards_until to control how seeking should commence.
 #[derive(Clone)]
 pub enum CursorSeek {
-    Continue,                   // Seek to the next character
-    Stop,                       // Finish and don't include this character
-    Done,                       // Finish and do include this character
-    AdvanceByCharCount(usize),  // Advance by N chars before checking again
-    AdvanceByLines(usize),      // Advance by N lines before checking again
+    Continue,                  // Seek to the next character
+    Stop,                      // Finish and don't include this character
+    Done,                      // Finish and do include this character
+    AdvanceByCharCount(usize), // Advance by N chars before checking again
+    AdvanceByLines(usize),     // Advance by N lines before checking again
     AdvanceUntil {
         // Advance until the given `until_fn` check passes
         until_fn: Rc<RefCell<dyn FnMut(char, CursorSeekContext) -> CursorSeek>>,
@@ -112,14 +106,16 @@ impl CursorSeek {
                     //     return FAIL;
                     // if (i >= 1 && eol && count == 0)      // started at last char in line
                     //     return OK;
-                },
+                }
 
                 /*
                  * Go one char past end of current word (if any)
                  */
                 Mode::One(starting_class) => {
                     let current_class = vim_cls(c, is_big_word);
-                    println!("1. c={c} starting_class={starting_class} current_class={current_class}");
+                    println!(
+                        "1. c={c} starting_class={starting_class} current_class={current_class}"
+                    );
 
                     if *starting_class != 0 && *starting_class == current_class {
                         mode = Mode::Two;
@@ -129,7 +125,7 @@ impl CursorSeek {
                         // if (i == -1 || (i >= 1 && eol && count == 0))
                         //     return OK;
                     }
-                },
+                }
 
                 /*
                  * go to next non-white
@@ -149,13 +145,13 @@ impl CursorSeek {
                     } else {
                         CursorSeek::Continue
                     }
-                },
+                }
             }
         })
     }
 
     // ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L431
-    pub fn back_word(bigword: bool, stop: bool) -> Self {
+    pub fn back_word(is_big_word: bool, stop: bool) -> Self {
         #[derive(Debug)]
         enum Mode {
             Initial,
@@ -174,17 +170,16 @@ impl CursorSeek {
         // is also considered to be a word.
         // CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
         CursorSeek::advance_until(move |c, _i| {
-            println!("-> {c}");
-            let a = match &mode {
+            match &mode {
                 Mode::Initial => {
-                    let starting_class = vim_cls(c, bigword);
+                    let starting_class = vim_cls(c, is_big_word);
 
                     // Always advance at least one char
                     mode = Mode::One(starting_class);
                     CursorSeek::Continue
-                },
+                }
                 Mode::One(starting_class) => {
-                    let current_class = vim_cls(c, bigword);
+                    let current_class = vim_cls(c, is_big_word);
 
                     println!("1. c={c} starting_class={starting_class:?} current_class={current_class:?}");
                     if !stop || *starting_class == current_class || *starting_class == 0 {
@@ -198,14 +193,14 @@ impl CursorSeek {
                         mode = Mode::Four;
                         CursorSeek::Continue
                     }
-                },
+                }
 
                 /*
                  * Skip white space before the word.
                  * Stop on an empty line.
                  */
                 Mode::Two => {
-                    let current_class = vim_cls(c, bigword);
+                    let current_class = vim_cls(c, is_big_word);
                     println!("2. c={c} current_class={current_class:?}");
 
                     if current_class == 0 {
@@ -226,7 +221,7 @@ impl CursorSeek {
                         mode = Mode::Three(current_class);
                         CursorSeek::Continue
                     }
-                },
+                }
 
                 /*
                  * Move backward to start of this word.
@@ -234,7 +229,7 @@ impl CursorSeek {
                 Mode::Three(previous_class) => {
                     // if (skip_chars(cls(), BACKWARD))
                     // return OK;
-                    let current_class = vim_cls(c, bigword);
+                    let current_class = vim_cls(c, is_big_word);
                     println!("3. c={c} current_class={current_class:?}");
 
                     if current_class == *previous_class {
@@ -243,7 +238,7 @@ impl CursorSeek {
                         mode = Mode::Four;
                         CursorSeek::Continue
                     }
-                },
+                }
 
                 // overshot - forward one
                 Mode::Four => {
@@ -255,8 +250,7 @@ impl CursorSeek {
                     println!("5. c={c}");
                     CursorSeek::Done
                 }
-            };
-            a
+            }
         })
     }
 
@@ -485,7 +479,7 @@ impl CursorSeek {
                         mode = Mode::FindingDelimiterSeekingForwards(buffer_copy, found_delimeter);
                         CursorSeek::Continue
                     }
-                },
+                }
                 Mode::FindingDelimiterSeekingForwards(buffer, initial_delimiter) => {
                     // No delimiter found, add to buffer and keep going
                     let mut buffer_copy = buffer.clone();
@@ -496,38 +490,65 @@ impl CursorSeek {
 
                     let Some(found_delimeter) = is_delimiter(&buffer_copy[..]) else {
                         // No delimiter found, add to buffer and keep going
-                        mode = Mode::FindingDelimiterSeekingForwards(buffer_copy, initial_delimiter.clone());
+                        mode = Mode::FindingDelimiterSeekingForwards(
+                            buffer_copy,
+                            initial_delimiter.clone(),
+                        );
                         return CursorSeek::Continue;
                     };
 
                     match (initial_delimiter, found_delimeter.clone()) {
-                        (Delimiter::Start(initial_type, _), Delimiter::Midpoint(found_type, found_length))
-                        | (Delimiter::Start(initial_type, _), Delimiter::End(found_type, found_length))
-                        | (Delimiter::Start(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
-                        | (Delimiter::EitherStartOrEnd(initial_type, _), Delimiter::Midpoint(found_type, found_length))
-                        | (Delimiter::EitherStartOrEnd(initial_type, _), Delimiter::End(found_type, found_length))
-                        | (Delimiter::EitherStartOrEnd(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
-                        | (Delimiter::Midpoint(initial_type, _), Delimiter::End(found_type, found_length))
-                        | (Delimiter::Midpoint(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
-                            if found_type == *initial_type => {
-
+                        (
+                            Delimiter::Start(initial_type, _),
+                            Delimiter::Midpoint(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::Start(initial_type, _),
+                            Delimiter::End(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::Start(initial_type, _),
+                            Delimiter::EitherStartOrEnd(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::EitherStartOrEnd(initial_type, _),
+                            Delimiter::Midpoint(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::EitherStartOrEnd(initial_type, _),
+                            Delimiter::End(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::EitherStartOrEnd(initial_type, _),
+                            Delimiter::EitherStartOrEnd(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::Midpoint(initial_type, _),
+                            Delimiter::End(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::Midpoint(initial_type, _),
+                            Delimiter::EitherStartOrEnd(found_type, found_length),
+                        ) if found_type == *initial_type => {
                             // found_delimeter is a valid match! This is the end of the match
                             // process. If inclusive though, advance to the end of the found match.
                             if inclusive == Inclusivity::Inclusive {
                                 mode = Mode::StopOnNextChar;
-                                CursorSeek::AdvanceByCharCount(found_length - 1 /* the cursor width */)
+                                CursorSeek::AdvanceByCharCount(
+                                    found_length - 1, /* the cursor width */
+                                )
                             } else {
                                 CursorSeek::Stop
                             }
-                        },
+                        }
                         (Delimiter::End(_, _), _) => {
                             unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is Delimiter::End! This should be impossible.");
-                        },
+                        }
 
                         // The found delimeter doesn't fit with the given traversal, so skip it.
                         _ => CursorSeek::Continue,
                     }
-                },
+                }
                 Mode::FindingDelimiterSeekingBackwards(buffer, initial_delimiter) => {
                     // No delimiter found, add to buffer and keep going
                     let mut buffer_copy = buffer.clone();
@@ -538,14 +559,22 @@ impl CursorSeek {
 
                     let Some(found_delimeter) = is_delimiter(&buffer_copy[..]) else {
                         // No delimiter found, add to buffer and keep going
-                        mode = Mode::FindingDelimiterSeekingBackwards(buffer_copy, initial_delimiter.clone());
+                        mode = Mode::FindingDelimiterSeekingBackwards(
+                            buffer_copy,
+                            initial_delimiter.clone(),
+                        );
                         return CursorSeek::Continue;
                     };
 
                     match (initial_delimiter, found_delimeter) {
-                        | (Delimiter::End(initial_type, _), Delimiter::Start(found_type, found_length))
-                        | (Delimiter::End(initial_type, _), Delimiter::EitherStartOrEnd(found_type, found_length))
-                            if found_type == *initial_type => {
+                        (
+                            Delimiter::End(initial_type, _),
+                            Delimiter::Start(found_type, found_length),
+                        )
+                        | (
+                            Delimiter::End(initial_type, _),
+                            Delimiter::EitherStartOrEnd(found_type, found_length),
+                        ) if found_type == *initial_type => {
                             // found_delimeter is a valid match! This is the end of the match
                             // process. If inclusive though, advance to the start of the found match.
                             if inclusive == Inclusivity::Inclusive {
@@ -554,15 +583,17 @@ impl CursorSeek {
                             } else {
                                 CursorSeek::Stop
                             }
-                        },
-                        (initial_delimeter, _) if !matches!(initial_delimeter, Delimiter::End(_, _))=> {
+                        }
+                        (initial_delimeter, _)
+                            if !matches!(initial_delimeter, Delimiter::End(_, _)) =>
+                        {
                             unimplemented!("mode if Mode::FindingDelimiterSeekingForwards when initial_delimiter is NOT Delimiter::End! This should be impossible.");
-                        },
+                        }
 
                         // The found delimeter doesn't fit with the given traversal, so skip it.
                         _ => CursorSeek::Continue,
                     }
-                },
+                }
                 Mode::StopOnNextChar => CursorSeek::Stop,
             }
         })

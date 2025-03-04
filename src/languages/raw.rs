@@ -1,7 +1,7 @@
-use std::{rc::Rc, cell::RefCell};
 use colored::ColoredString;
+use std::{cell::RefCell, rc::Rc};
 
-use crate::node_tree::node::{TokenKindTrait, InMemoryNode};
+use crate::node_tree::node::{InMemoryNode, TokenKindTrait};
 
 /// The size of characters from the literal stored in each ast node.
 const RAW_LITERAL_NODE_CHUNK_SIZE_CHARS: usize = 32;
@@ -12,7 +12,10 @@ const RAW_LITERAL_NODE_CHUNK_SIZE_CHARS: usize = 32;
 pub enum SyntaxKind {}
 
 impl TokenKindTrait for SyntaxKind {
-    fn apply_debug_syntax_color(text: String, _ancestry: std::vec::IntoIter<SyntaxKind>) -> ColoredString {
+    fn apply_debug_syntax_color(
+        text: String,
+        _ancestry: std::vec::IntoIter<SyntaxKind>,
+    ) -> ColoredString {
         text.into()
     }
 
@@ -21,10 +24,10 @@ impl TokenKindTrait for SyntaxKind {
         true
     }
 
-    fn parse(literal: &str, _parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>> {
-        InMemoryNode::new_tree_from_literal_in_chunks(
-            literal,
-            RAW_LITERAL_NODE_CHUNK_SIZE_CHARS,
-        )
+    fn parse(
+        literal: &str,
+        _parent: Option<Rc<RefCell<InMemoryNode<Self>>>>,
+    ) -> Rc<RefCell<InMemoryNode<Self>>> {
+        InMemoryNode::new_tree_from_literal_in_chunks(literal, RAW_LITERAL_NODE_CHUNK_SIZE_CHARS)
     }
 }

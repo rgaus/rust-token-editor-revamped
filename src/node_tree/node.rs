@@ -1,25 +1,23 @@
 use crate::node_tree::{
+    fractional_index::VariableSizeFractionalIndex,
     node_debug_validators::{
-        validate_node_next,
-        validate_node_previous,
-        NodeNextValidReason,
-        NodePreviousValidReason,
+        validate_node_next, validate_node_previous, NodeNextValidReason, NodePreviousValidReason,
     },
     utils::{Direction, Inclusivity},
-    fractional_index::VariableSizeFractionalIndex,
 };
-use colored::{Colorize, ColoredString, CustomColor};
+use colored::{ColoredString, Colorize, CustomColor};
 use std::{
     cell::{RefCell, RefMut},
-    rc::{Rc, Weak}, fmt::Debug,
+    fmt::Debug,
+    rc::{Rc, Weak},
 };
 
 /// An enum used by seek_forwards_until to control how seeking should commence.
 pub enum NodeSeek<Item> {
-    Continue(Item),                    // Seek to the next token
-    Stop,                              // Finish and don't include this token
-    Done(Item),                        // Finish and do include this token
-    ChangeDirection(Item, Direction),  // "Continue" the current node, and then switch direction
+    Continue(Item),                   // Seek to the next token
+    Stop,                             // Finish and don't include this token
+    Done(Item),                       // Finish and do include this token
+    ChangeDirection(Item, Direction), // "Continue" the current node, and then switch direction
 }
 
 /// A trait that any new language definition must implement, which tells the system how to properly
@@ -31,7 +29,10 @@ pub trait TokenKindTrait: Clone + Debug + PartialEq {
 
     /// When called, determine the color the given text should render with when rendered into a
     /// terminal to properly apply syntax highlighting.
-    fn apply_debug_syntax_color(text: String, token_kind_ancestry: std::vec::IntoIter<Self>) -> ColoredString;
+    fn apply_debug_syntax_color(
+        text: String,
+        token_kind_ancestry: std::vec::IntoIter<Self>,
+    ) -> ColoredString;
 
     /// When called, should return whether this token is reparsable.
     ///
@@ -46,7 +47,10 @@ pub trait TokenKindTrait: Clone + Debug + PartialEq {
     fn is_reparsable(&self) -> bool;
 
     /// When called, parse the literal specified, returning a new token subtree
-    fn parse(literal: &str, parent: Option<Rc<RefCell<InMemoryNode<Self>>>>) -> Rc<RefCell<InMemoryNode<Self>>>;
+    fn parse(
+        literal: &str,
+        parent: Option<Rc<RefCell<InMemoryNode<Self>>>>,
+    ) -> Rc<RefCell<InMemoryNode<Self>>>;
 }
 
 #[derive(Clone, PartialEq)]
@@ -55,7 +59,10 @@ pub enum NodeMetadata<TokenKind: TokenKindTrait> {
     Literal(String),
     Root,
     Fragment,
-    AstNode { kind: TokenKind, literal: Option<String> },
+    AstNode {
+        kind: TokenKind,
+        literal: Option<String>,
+    },
 }
 
 impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
@@ -65,12 +72,28 @@ impl<TokenKind: TokenKindTrait> Debug for NodeMetadata<TokenKind> {
             Self::Literal(text) => write!(f, "LITERAL({text})"),
             Self::Root => write!(f, "ROOT"),
             Self::Fragment => write!(f, "FRAGMENT"),
-            Self::AstNode{ kind, literal: None } => write!(f, "{}{}", "AST:".bright_black(), format!("{:?}", kind).bold().cyan()),
-            Self::AstNode{ kind, literal: Some(literal) } => write!(f, "{}{}({})", "AST:".bright_black(), format!("{:?}", kind).bold().cyan(), literal.replace("\n", "\\n").on_bright_black()),
+            Self::AstNode {
+                kind,
+                literal: None,
+            } => write!(
+                f,
+                "{}{}",
+                "AST:".bright_black(),
+                format!("{:?}", kind).bold().cyan()
+            ),
+            Self::AstNode {
+                kind,
+                literal: Some(literal),
+            } => write!(
+                f,
+                "{}{}({})",
+                "AST:".bright_black(),
+                format!("{:?}", kind).bold().cyan(),
+                literal.replace("\n", "\\n").on_bright_black()
+            ),
         }
     }
 }
-
 
 /// A node is the building block of a node tree, and repreents a node in an AST-like structure.
 /// Nodes are linked both as a tree (ie, parent / children / etc) as well as doubly linked as a
@@ -129,12 +152,17 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// Given a literal string, returns a token tree which represents the literal using a series of
     /// nodes all under a common parent. Each node contains an `chars_per_node` characters except
     /// for the final one, which may contain less if literal.len() % chars_per_node != 0
-    pub fn new_tree_from_literal_in_chunks(literal: &str, chars_per_node: usize) -> Rc<RefCell<Self>> {
+    pub fn new_tree_from_literal_in_chunks(
+        literal: &str,
+        chars_per_node: usize,
+    ) -> Rc<RefCell<Self>> {
         let parent = Self::new_root();
         let literal: String = literal.into();
 
         let literal_char_vector = literal.chars().collect::<Vec<char>>();
-        let literal_chunks = literal_char_vector.chunks(chars_per_node).map(|char_slice| char_slice.iter().collect::<String>());
+        let literal_chunks = literal_char_vector
+            .chunks(chars_per_node)
+            .map(|char_slice| char_slice.iter().collect::<String>());
 
         for literal in literal_chunks {
             let chunk_node = Self::new_from_literal(&literal);
@@ -278,7 +306,13 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 ),
             ];
 
-            flags.into_iter().fold("".into(), |acc, n| if n.len() > 0 { format!("{acc} {n}") } else { acc })
+            flags.into_iter().fold("".into(), |acc, n| {
+                if n.len() > 0 {
+                    format!("{acc} {n}")
+                } else {
+                    acc
+                }
+            })
         };
 
         println!(
@@ -307,7 +341,14 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         if node.metadata == NodeMetadata::Empty && node.children.is_empty() {
             println!("{spacer}  (no children)")
         } else {
-            let new_spacer = &format!("{spacer}{} ", "|".custom_color(CustomColor { r: 40, g: 40, b: 40 }));
+            let new_spacer = &format!(
+                "{spacer}{} ",
+                "|".custom_color(CustomColor {
+                    r: 40,
+                    g: 40,
+                    b: 40
+                })
+            );
             let mut counter = 0;
             for child in &node.children {
                 Self::dump_child(child, new_spacer, Some(counter));
@@ -331,18 +372,35 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         while let Some(pointer_unwrapped) = pointer {
             print!("{:?} -> ", pointer_unwrapped.borrow().metadata);
 
-            let ancestry_index = ancestry.iter().position(|n: &Rc<RefCell<Self>>| *n == pointer_unwrapped);
+            let ancestry_index = ancestry
+                .iter()
+                .position(|n: &Rc<RefCell<Self>>| *n == pointer_unwrapped);
             if let Some(ancestry_index) = ancestry_index {
                 println!("CYCLE!");
                 println!("CYCLE FOUND:");
                 for index in ancestry_index..ancestry.len() {
                     let node = ancestry[index].clone();
                     if index == ancestry_index {
-                        println!("{}.\t+--> {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
-                    } else if index == ancestry.len()-1 {
-                        println!("{}.\t+--- {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
+                        println!(
+                            "{}.\t+--> {:?}\t{:?}",
+                            index - ancestry_index,
+                            node.borrow().metadata,
+                            node.borrow().index
+                        );
+                    } else if index == ancestry.len() - 1 {
+                        println!(
+                            "{}.\t+--- {:?}\t{:?}",
+                            index - ancestry_index,
+                            node.borrow().metadata,
+                            node.borrow().index
+                        );
                     } else {
-                        println!("{}.\t|    {:?}\t{:?}", index - ancestry_index, node.borrow().metadata, node.borrow().index);
+                        println!(
+                            "{}.\t|    {:?}\t{:?}",
+                            index - ancestry_index,
+                            node.borrow().metadata,
+                            node.borrow().index
+                        );
                     }
                 }
                 break;
@@ -351,7 +409,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             pointer = match direction {
                 Direction::Forwards => pointer_unwrapped.borrow().next.clone(),
                 Direction::Backwards => pointer_unwrapped.borrow().previous.clone(),
-            }.as_ref().map(|n| n.upgrade()).flatten();
+            }
+            .as_ref()
+            .map(|n| n.upgrade())
+            .flatten();
             ancestry.push(pointer_unwrapped);
         }
 
@@ -368,12 +429,19 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn literal(node: &Rc<RefCell<Self>>) -> String {
         match node.borrow().metadata.clone() {
             NodeMetadata::Literal(literal) => literal,
-            NodeMetadata::AstNode { literal: Some(literal), .. } => literal,
+            NodeMetadata::AstNode {
+                literal: Some(literal),
+                ..
+            } => literal,
             _ => "".into(),
         }
     }
     pub fn literal_substring(node: &Rc<RefCell<Self>>, start: usize, length: usize) -> String {
-        Self::literal(node).chars().skip(start).take(length).collect::<String>()
+        Self::literal(node)
+            .chars()
+            .skip(start)
+            .take(length)
+            .collect::<String>()
     }
     pub fn set_literal(node: &Rc<RefCell<Self>>, new_literal: &str) {
         Self::set_metadata(node, NodeMetadata::Literal(new_literal.into()));
@@ -393,7 +461,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             return literal;
         };
 
-        let child_literals = node.borrow().children.iter().map(|node| Self::deep_literal(node)).collect::<String>();
+        let child_literals = node
+            .borrow()
+            .children
+            .iter()
+            .map(|node| Self::deep_literal(node))
+            .collect::<String>();
         format!("{literal}{child_literals}")
     }
 
@@ -423,8 +496,18 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// index.
     // fn recompute_index(node: &Rc<RefCell<Self>>) {
     fn assign_index(mut node_mut: RefMut<'_, Self>) {
-        let first = node_mut.previous.as_ref().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
-        let second = node_mut.next.as_ref().map(|n| n.upgrade()).flatten().map(|n| n.borrow().index.clone());
+        let first = node_mut
+            .previous
+            .as_ref()
+            .map(|n| n.upgrade())
+            .flatten()
+            .map(|n| n.borrow().index.clone());
+        let second = node_mut
+            .next
+            .as_ref()
+            .map(|n| n.upgrade())
+            .flatten()
+            .map(|n| n.borrow().index.clone());
         let new_index = VariableSizeFractionalIndex::generate_or_fallback(first, second);
         (*node_mut).index = new_index;
     }
@@ -434,14 +517,16 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             .borrow()
             .previous
             .as_ref()
-            .map(|n| n.upgrade()).flatten()
+            .map(|n| n.upgrade())
+            .flatten()
             .map(|n| n.borrow().index.clone());
         let after_index = Self::deep_last_child(node)
             .unwrap_or_else(|| node.clone())
             .borrow()
             .next
             .as_ref()
-            .map(|n| n.upgrade()).flatten()
+            .map(|n| n.upgrade())
+            .flatten()
             .map(|n| n.borrow().index.clone());
 
         let mut cursor = node.clone();
@@ -508,7 +593,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         if node.borrow().children.is_empty() {
             0
         } else {
-            1 + node.borrow().children.iter().map(Self::deep_children_length).sum::<usize>()
+            1 + node
+                .borrow()
+                .children
+                .iter()
+                .map(Self::deep_children_length)
+                .sum::<usize>()
         }
     }
 
@@ -516,19 +606,30 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// token in the token tree.
     ///
     /// Returns the head of the newly reparsed subtree, or an error.
-    pub fn reparse_child_at_index(parent: Rc<RefCell<Self>>, index: usize) -> Result<Rc<RefCell<Self>>, String> {
-        println!("REPARSE_CHILD_AT_INDEX: parent={:?} index={index}", parent.borrow().metadata);
+    pub fn reparse_child_at_index(
+        parent: Rc<RefCell<Self>>,
+        index: usize,
+    ) -> Result<Rc<RefCell<Self>>, String> {
+        println!(
+            "REPARSE_CHILD_AT_INDEX: parent={:?} index={index}",
+            parent.borrow().metadata
+        );
         let mut reparsable_pointer = parent.clone();
         let mut reparsable_pointer_child_index = index;
 
         // 1. Find the next parsable node walking up the node tree
         while match &reparsable_pointer.borrow().metadata {
-            NodeMetadata::AstNode{ kind, .. } => !TokenKind::is_reparsable(&kind),
+            NodeMetadata::AstNode { kind, .. } => !TokenKind::is_reparsable(&kind),
             _ => false, // NOTE: consider any non ast node containing nodes as not parsable.
         } {
             let (Some(child_index), Some(parent)) = (
                 reparsable_pointer.borrow().child_index,
-                reparsable_pointer.borrow().parent.as_ref().map(|n| n.upgrade()).flatten(),
+                reparsable_pointer
+                    .borrow()
+                    .parent
+                    .as_ref()
+                    .map(|n| n.upgrade())
+                    .flatten(),
             ) else {
                 // Hmm, we've reached the top of the node tree and no nodes are parsable. In this
                 // case, the whole doeument needs to be reparsed! :(
@@ -566,11 +667,18 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     /// Returns the new child node.
     ///
     /// This is identical to InMemoryNode::insert_child(parent, child, 0).
-    pub fn prepend_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
+    pub fn prepend_child(
+        parent: &Rc<RefCell<Self>>,
+        child: Rc<RefCell<Self>>,
+    ) -> Rc<RefCell<Self>> {
         Self::insert_child(parent, child, 0)
     }
 
-    pub fn insert_child(parent: &Rc<RefCell<Self>>, child: Rc<RefCell<Self>>, index: usize) -> Rc<RefCell<Self>> {
+    pub fn insert_child(
+        parent: &Rc<RefCell<Self>>,
+        child: Rc<RefCell<Self>>,
+        index: usize,
+    ) -> Rc<RefCell<Self>> {
         // println!(
         //     "CHILD: {:?} PARENT: {:?} INDEX: {}",
         //     child.borrow().metadata,
@@ -612,7 +720,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             }
 
             // Step N: Relink old_child_at_index.OLD previous.next = child
-            if let Some(Some(previous)) = old_child_at_index.borrow().previous.clone().map(|n| n.upgrade()) {
+            if let Some(Some(previous)) = old_child_at_index
+                .borrow()
+                .previous
+                .clone()
+                .map(|n| n.upgrade())
+            {
                 (*previous.borrow_mut()).next = Some(Rc::downgrade(&child));
             }
 
@@ -634,7 +747,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
             // Update all `child_index` values on the children afterwards to take into account its
             // new index in `children`.
-            for child_index in index+1..(parent_mut.children.len()) {
+            for child_index in index + 1..(parent_mut.children.len()) {
                 let mut child_mut = parent_mut.children[child_index].borrow_mut();
                 child_mut.child_index = match child_mut.child_index {
                     Some(child_index) => Some(child_index + 1),
@@ -723,7 +836,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             //     None
             // };
 
-            // Step N: set this child's index in its parent's children array 
+            // Step N: set this child's index in its parent's children array
             (*child_mut).child_index = Some(parent.borrow().children.len());
 
             // Step N: After linking child.previous and child.next, assign this child its new
@@ -733,8 +846,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
         // Step 4: Update the parent's next sibling's previous
         // (ie, parent.(OLD) deep_last_child.next.previous) to be child
-        if let Some(deep_last_child) = InMemoryNode::deep_last_child(&parent).or_else(|| Some(parent.clone())) {
-            if let Some(Some(deep_last_child_next)) = deep_last_child.borrow().next.clone().map(|n| n.upgrade()) {
+        if let Some(deep_last_child) =
+            InMemoryNode::deep_last_child(&parent).or_else(|| Some(parent.clone()))
+        {
+            if let Some(Some(deep_last_child_next)) =
+                deep_last_child.borrow().next.clone().map(|n| n.upgrade())
+            {
                 deep_last_child_next.borrow_mut().previous = Some(Rc::downgrade(&child));
             }
         }
@@ -883,7 +1000,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
     pub fn remove_all_children(parent: &Rc<RefCell<Self>>) {
         for (index, _child) in parent.borrow().children.iter().enumerate() {
             Self::remove_child_at_index(parent, index);
-        };
+        }
     }
 
     /// When called, swaps the child within `parent` at `index` with the `new_child`.
@@ -948,11 +1065,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
             // Step N: Update new_child.next to be old_child.deep_last_child.next
             if new_child_mut.next.is_none() {
-                (*new_child_mut).next = if let Some(deep_last_child) = old_child_deep_last_child.clone() {
-                    deep_last_child.borrow().next.clone()
-                } else {
-                    old_child.borrow().next.clone()
-                };
+                (*new_child_mut).next =
+                    if let Some(deep_last_child) = old_child_deep_last_child.clone() {
+                        deep_last_child.borrow().next.clone()
+                    } else {
+                        old_child.borrow().next.clone()
+                    };
             }
 
             // Step N: Update the next sibling of old_child to point back to it
@@ -964,17 +1082,17 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 .map(|n| n.upgrade())
                 .flatten()
             {
-                (*deep_last_child_next.borrow_mut()).previous = Some(
-                    Rc::downgrade(&new_child_deep_last_child.unwrap_or(new_child.clone()))
-                );
-            // } else if let Some(old_child_next) = old_child
-            //     .borrow()
-            //     .next
-            //     .clone()
-            //     .map(|n| n.upgrade())
-            //     .flatten()
-            // {
-            //     (*old_child_next.borrow_mut()).next = Some(Rc::downgrade(&new_child));
+                (*deep_last_child_next.borrow_mut()).previous = Some(Rc::downgrade(
+                    &new_child_deep_last_child.unwrap_or(new_child.clone()),
+                ));
+                // } else if let Some(old_child_next) = old_child
+                //     .borrow()
+                //     .next
+                //     .clone()
+                //     .map(|n| n.upgrade())
+                //     .flatten()
+                // {
+                //     (*old_child_next.borrow_mut()).next = Some(Rc::downgrade(&new_child));
             };
 
             // Step N: Update new_child.previous to be old_child.previous
@@ -1016,8 +1134,15 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
         let cursor = match (current_node_included, direction) {
             (Inclusivity::Inclusive, _direction) => Some(node.clone()),
-            (Inclusivity::Exclusive, Direction::Forwards) => node.borrow().next.as_ref().map(|n| n.upgrade()).flatten(),
-            (Inclusivity::Exclusive, Direction::Backwards) => node.borrow().previous.as_ref().map(|n| n.upgrade()).flatten(),
+            (Inclusivity::Exclusive, Direction::Forwards) => {
+                node.borrow().next.as_ref().map(|n| n.upgrade()).flatten()
+            }
+            (Inclusivity::Exclusive, Direction::Backwards) => node
+                .borrow()
+                .previous
+                .as_ref()
+                .map(|n| n.upgrade())
+                .flatten(),
         };
         let Some(mut cursor) = cursor else {
             // The cursor node is None, so bail early!
@@ -1046,7 +1171,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                     // Continue looping to the next node!
                     output.push(result);
 
-                    let cursor_previous = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
+                    let cursor_previous = cursor
+                        .borrow()
+                        .previous
+                        .as_ref()
+                        .map(|n| n.upgrade())
+                        .flatten();
                     let Some(cursor_previous) = cursor_previous else {
                         // We've reached the end!
                         break;
@@ -1069,7 +1199,12 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                     // Continue looping to the previous node!
                     output.push(result);
 
-                    let cursor_previous = cursor.borrow().previous.as_ref().map(|n| n.upgrade()).flatten();
+                    let cursor_previous = cursor
+                        .borrow()
+                        .previous
+                        .as_ref()
+                        .map(|n| n.upgrade())
+                        .flatten();
                     let Some(cursor_previous) = cursor_previous else {
                         // We've reached the end!
                         break;
@@ -1078,7 +1213,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                     cursor = cursor_previous;
                     iteration_counter += 1;
                     continue;
-                },
+                }
                 (NodeSeek::ChangeDirection(result, Direction::Forwards), Direction::Backwards) => {
                     direction = Direction::Forwards;
 
@@ -1094,8 +1229,10 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                     cursor = cursor_next;
                     iteration_counter += 1;
                     continue;
-                },
-                (NodeSeek::ChangeDirection(_, _), _) => { continue; },
+                }
+                (NodeSeek::ChangeDirection(_, _), _) => {
+                    continue;
+                }
             }
         }
 
@@ -1153,16 +1290,20 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         mut until_fn: UntilFn,
     ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
     where
-        UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>
+        UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
-        let node_value_pairs = Self::seek_forwards_until(start_node, start_node_included, |node, index| {
-            match until_fn(node, index) {
+        let node_value_pairs = Self::seek_forwards_until(
+            start_node,
+            start_node_included,
+            |node, index| {
+                match until_fn(node, index) {
                 NodeSeek::Continue(value) => NodeSeek::Continue((node.clone(), value)),
                 NodeSeek::Done(value) => NodeSeek::Done((node.clone(), value)),
                 NodeSeek::Stop => NodeSeek::Stop,
                 NodeSeek::ChangeDirection(_, _) => unimplemented!("NodeSeek::ChangeDirection makes no sense in the context of InMemoryNode::remove_nodes_sequentially_until!")
             }
-        });
+            },
+        );
 
         let (nodes, values): (Vec<_>, Vec<_>) = node_value_pairs.unzip();
 
@@ -1185,10 +1326,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
 
                 // If the parent of the child that was just deleted now has zero children...
                 if parent.borrow().children.is_empty() {
-                    if let (
-                        Some(Some(parent_of_parent)),
-                        Some(parent_child_index),
-                    ) = (
+                    if let (Some(Some(parent_of_parent)), Some(parent_child_index)) = (
                         parent.borrow().parent.as_ref().map(|n| n.upgrade()),
                         parent.borrow().child_index,
                     ) {
@@ -1224,4 +1362,3 @@ impl<TokenKind: TokenKindTrait> PartialOrd for InMemoryNode<TokenKind> {
         }
     }
 }
-

@@ -1,12 +1,16 @@
-use std::{fmt::{Display, Debug}, collections::VecDeque, iter::zip};
+use std::{
+    collections::VecDeque,
+    fmt::{Debug, Display},
+    iter::zip,
+};
 
 fn get_midpoint_u8(smaller: u8, larger: u8) -> u8 {
-    if smaller == larger || smaller+1 == larger {
+    if smaller == larger || smaller + 1 == larger {
         // 5 and 5, or 5 and 6
         smaller
-    } else if smaller+2 == larger {
+    } else if smaller + 2 == larger {
         // 5 and 7
-        smaller+1
+        smaller + 1
     } else if smaller == u8::MIN && larger == u8::MAX {
         u8::MAX / 8
     } else {
@@ -45,8 +49,14 @@ impl FractionalIndex {
 
     pub fn generate(previous: Self, next: Self) -> Self {
         let new_value = (previous.0 / 2) + (next.0 / 2);
-        assert_ne!(previous.0, new_value, "FractionalIndex: ran out of precision to represent new entry!");
-        assert_ne!(next.0, new_value, "FractionalIndex: ran out of precision to represent new entry!");
+        assert_ne!(
+            previous.0, new_value,
+            "FractionalIndex: ran out of precision to represent new entry!"
+        );
+        assert_ne!(
+            next.0, new_value,
+            "FractionalIndex: ran out of precision to represent new entry!"
+        );
         Self(new_value)
     }
 
@@ -68,16 +78,18 @@ impl FractionalIndex {
     /// rounding may result in off by one errors in spacings.
     ///
     /// Note that the output sequence does not include `start` or `end`, just the in between values.
-    pub fn distributed_sequence(start: &Self, end: &Self, sequence_length: usize) -> impl std::iter::Iterator<Item = Self> {
+    pub fn distributed_sequence(
+        start: &Self,
+        end: &Self,
+        sequence_length: usize,
+    ) -> impl std::iter::Iterator<Item = Self> {
         if sequence_length == 0 {
             return vec![].into_iter();
         };
 
         let multiplier = (end.0 - start.0) / sequence_length;
 
-        let result = (0..sequence_length).map(|index| {
-            Self::of(start.0 + (index * multiplier))
-        });
+        let result = (0..sequence_length).map(|index| Self::of(start.0 + (index * multiplier)));
 
         for (a, b) in zip(result.clone(), result.clone().skip(1)) {
             assert_ne!(a, b, "FractionalIndex::distributed_sequence: ran out of precision to represent new entry!");
@@ -94,14 +106,17 @@ impl FractionalIndex {
         sequence_length: usize,
     ) -> impl std::iter::Iterator<Item = Self> {
         match (start, end) {
-            (None, None) => Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length),
+            (None, None) => {
+                Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length)
+            }
             (None, Some(end)) => Self::distributed_sequence(&Self::start(), &end, sequence_length),
-            (Some(start), None) => Self::distributed_sequence(&start, &Self::end(), sequence_length),
+            (Some(start), None) => {
+                Self::distributed_sequence(&start, &Self::end(), sequence_length)
+            }
             (Some(start), Some(end)) => Self::distributed_sequence(&start, &end, sequence_length),
         }
     }
 }
-
 
 #[derive(Clone, PartialEq, Eq, Ord)]
 pub struct VariableSizeFractionalIndex(Vec<u8>);
@@ -109,7 +124,9 @@ pub struct VariableSizeFractionalIndex(Vec<u8>);
 impl Display for VariableSizeFractionalIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let places = u8::MAX.checked_ilog(8).unwrap();
-        let entries = self.0.iter()
+        let entries = self
+            .0
+            .iter()
             .map(|entry| format!("{}", entry))
             .collect::<Vec<String>>()
             .join(",");
@@ -120,7 +137,9 @@ impl Display for VariableSizeFractionalIndex {
 impl Debug for VariableSizeFractionalIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // let places = u8::MAX.checked_ilog(8).unwrap();
-        let entries = self.0.iter()
+        let entries = self
+            .0
+            .iter()
             .map(|entry| format!("{}", entry))
             .collect::<Vec<String>>()
             .join(",");
@@ -170,7 +189,7 @@ impl VariableSizeFractionalIndex {
             (next.0.len(), previous.0.len())
         };
 
-        for index in (0..shorter_length+1).rev() {
+        for index in (0..shorter_length + 1).rev() {
             let previous_ancestry = &previous.0[..index];
             let next_ancestry = &next.0[..index];
             if previous_ancestry != next_ancestry {
@@ -184,10 +203,16 @@ impl VariableSizeFractionalIndex {
 
                 let new_tail = get_midpoint_u8(*previous_tail, *next_tail);
                 result.push(new_tail);
-            };
+            }
             // If the new generated value is the same as the previous (ie, maybe trying to pick a
             // number between 5 and 6), then add a 127 as another place on the end.
-            if result.len() == previous.0.len() && previous.0.iter().enumerate().all(|(index, n)| *n == result[index]) {
+            if result.len() == previous.0.len()
+                && previous
+                    .0
+                    .iter()
+                    .enumerate()
+                    .all(|(index, n)| *n == result[index])
+            {
                 result.push(get_midpoint_u8(u8::MIN, u8::MAX));
             }
             return Self(result);
@@ -216,10 +241,13 @@ impl VariableSizeFractionalIndex {
     /// required to get to the reqested sequence length.
     ///
     /// Note that the output sequence does not include `start` or `end`, just the in between values.
-    pub fn distributed_sequence(start: &Self, end: &Self, sequence_length: usize) -> impl std::iter::Iterator<Item = Self> {
+    pub fn distributed_sequence(
+        start: &Self,
+        end: &Self,
+        sequence_length: usize,
+    ) -> impl std::iter::Iterator<Item = Self> {
         let mut sequence = VecDeque::from(vec![start.clone(), end.clone()]);
         while sequence.len() < sequence_length {
-
             // Generate a new element between each existing element
             let mut start_index = 0;
             let mut end_index = 1;
@@ -228,7 +256,7 @@ impl VariableSizeFractionalIndex {
                 let start = &sequence[start_index];
                 let end = &sequence[end_index];
                 let midpoint = Self::generate(start, end);
-                sequence.insert(start_index+1, midpoint);
+                sequence.insert(start_index + 1, midpoint);
                 start_index += 2 /* each element of pair */ + 1 /* newly added element */;
                 end_index += 2 /* each element of pair */ + 1 /* newly added element */;
             }
@@ -250,9 +278,13 @@ impl VariableSizeFractionalIndex {
         sequence_length: usize,
     ) -> impl std::iter::Iterator<Item = Self> {
         match (start, end) {
-            (None, None) => Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length),
+            (None, None) => {
+                Self::distributed_sequence(&Self::start(), &Self::end(), sequence_length)
+            }
             (None, Some(end)) => Self::distributed_sequence(&Self::start(), &end, sequence_length),
-            (Some(start), None) => Self::distributed_sequence(&start, &Self::end(), sequence_length),
+            (Some(start), None) => {
+                Self::distributed_sequence(&start, &Self::end(), sequence_length)
+            }
             (Some(start), Some(end)) => Self::distributed_sequence(&start, &end, sequence_length),
         }
     }

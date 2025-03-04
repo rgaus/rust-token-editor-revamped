@@ -1,6 +1,6 @@
 mod cursor;
-mod selection;
 mod cursor_seek;
+mod selection;
 pub use cursor::Cursor;
-pub use selection::Selection;
 pub use cursor_seek::CursorSeek;
+pub use selection::Selection;

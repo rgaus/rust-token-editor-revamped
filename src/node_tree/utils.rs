@@ -77,10 +77,20 @@ pub fn is_delimiter(buffer: &[char]) -> Option<Delimiter> {
         [.., '*', '/'] => Some(Delimiter::End(DelimiterType::CMultiLineComment, 2)),
 
         [.., '#', 'i', 'f'] => Some(Delimiter::Start(DelimiterType::CPreprocesserConditional, 3)),
-        [.., '#', 'i', 'f', 'd', 'e', 'f'] => Some(Delimiter::Start(DelimiterType::CPreprocesserConditional, 6)),
-        [.., '#', 'e', 'l', 's', 'e'] => Some(Delimiter::Midpoint(DelimiterType::CPreprocesserConditional, 5)),
-        [.., '#', 'e', 'l', 'i', 'f'] => Some(Delimiter::Midpoint(DelimiterType::CPreprocesserConditional, 5)),
-        [.., '#', 'e', 'n', 'd', 'i', 'f'] => Some(Delimiter::End(DelimiterType::CPreprocesserConditional, 6)),
+        [.., '#', 'i', 'f', 'd', 'e', 'f'] => {
+            Some(Delimiter::Start(DelimiterType::CPreprocesserConditional, 6))
+        }
+        [.., '#', 'e', 'l', 's', 'e'] => Some(Delimiter::Midpoint(
+            DelimiterType::CPreprocesserConditional,
+            5,
+        )),
+        [.., '#', 'e', 'l', 'i', 'f'] => Some(Delimiter::Midpoint(
+            DelimiterType::CPreprocesserConditional,
+            5,
+        )),
+        [.., '#', 'e', 'n', 'd', 'i', 'f'] => {
+            Some(Delimiter::End(DelimiterType::CPreprocesserConditional, 6))
+        }
 
         _ => None,
     }

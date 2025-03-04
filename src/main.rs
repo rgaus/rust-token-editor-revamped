@@ -1,9 +1,9 @@
-mod node_tree;
 mod languages;
+mod node_tree;
 
-use std::{rc::Rc, cell::RefCell};
+use std::{cell::RefCell, rc::Rc};
 
-use pancurses::{initscr, endwin, Input, resize_term, noecho, echo, curs_set};
+use pancurses::{curs_set, echo, endwin, initscr, noecho, resize_term, Input};
 
 use crate::node_tree::{
     cursor::{Cursor, CursorSeek, Selection},
@@ -11,7 +11,8 @@ use crate::node_tree::{
         InMemoryNode,
         NodeMetadata,
         // NodeSeek,
-    }, utils::{Inclusivity, Newline},
+    },
+    utils::{Inclusivity, Newline},
     // utils::Inclusivity, fractional_index::VariableSizeFractionalIndex,
     // fractional_index::FractionalIndex,
 };
@@ -34,7 +35,9 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
 
     {
         let mut selection = cursor.selection();
-        selection.secondary = selection.secondary.seek_forwards(CursorSeek::advance_until_start_end());
+        selection.secondary = selection
+            .secondary
+            .seek_forwards(CursorSeek::advance_until_start_end());
         window.mvaddstr(0, 0, selection.literal());
     }
 
@@ -42,54 +45,60 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
         let (rows, cols) = cursor.to_rows_cols();
 
         status = format!("({rows}, {cols}) {:?}", cursor);
-        window.mvaddstr(height_chars-1, 0, &status);
+        window.mvaddstr(height_chars - 1, 0, &status);
 
-        window.mv((rows-1) as i32, (cols-1) as i32);
+        window.mv((rows - 1) as i32, (cols - 1) as i32);
         // dbg!(rows, cols);
 
         window.refresh();
         match window.getch() {
-            Some(Input::KeyResize) => { resize_term(0, 0); },
+            Some(Input::KeyResize) => {
+                resize_term(0, 0);
+            }
             Some(Input::Character(x)) if x == 'q' => break,
 
             Some(Input::Character('l')) => {
                 cursor = cursor.seek_forwards(CursorSeek::AdvanceByCharCount(1));
-            },
+            }
             Some(Input::Character('h')) => {
                 cursor = cursor.seek_backwards(CursorSeek::AdvanceByCharCount(1));
-            },
+            }
             Some(Input::Character('j')) => {
                 cursor = cursor.seek_forwards(CursorSeek::AdvanceByLines(1));
-            },
+            }
             Some(Input::Character('k')) => {
                 cursor = cursor.seek_backwards(CursorSeek::AdvanceByLines(1));
-            },
+            }
             Some(Input::Character('w')) => {
                 cursor = cursor.seek_forwards(CursorSeek::forwards_word(false));
-            },
+            }
             Some(Input::Character('b')) => {
                 cursor = cursor.seek_backwards(CursorSeek::forwards_word(false));
-            },
+            }
 
             Some(Input::Character('%')) => {
-                cursor = cursor.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive));
-            },
+                cursor = cursor.seek_forwards(CursorSeek::advance_until_matching_delimiter(
+                    Inclusivity::Inclusive,
+                ));
+            }
 
             Some(Input::Character('0')) => {
                 cursor = cursor.seek_backwards(CursorSeek::advance_until_line_start());
-            },
+            }
             Some(Input::Character('^')) => {
-                cursor = cursor.seek_backwards(CursorSeek::advance_until_line_start_after_leading_whitespace());
-            },
+                cursor = cursor.seek_backwards(
+                    CursorSeek::advance_until_line_start_after_leading_whitespace(),
+                );
+            }
             Some(Input::Character('$')) => {
                 cursor = cursor.seek_forwards(CursorSeek::advance_until_line_end());
-            },
+            }
             Some(Input::Character('G')) => {
                 cursor = cursor.seek_forwards(CursorSeek::advance_until_start_end());
-            },
+            }
             Some(Input::Character('g')) => {
                 cursor = cursor.seek_backwards(CursorSeek::advance_until_start_end());
-            },
+            }
             _ => (),
         }
     }
@@ -99,7 +108,8 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
 }
 
 fn main() {
-    let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
+    let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(
+        r#"
         let foo = "brew";
         function main() {
             console.log("hello world");
@@ -114,7 +124,8 @@ fn main() {
                 return "fizzbuzz";
             }
         }
-    "#);
+    "#,
+    );
     // let root = InMemoryNode::<languages::typescript::SyntaxKind>::new_from_parsed(r#"
     //     let foo = "brew";
     //     function main() {
@@ -335,7 +346,11 @@ fn main() {
 
     let mut selection = Cursor::new(root.clone()).selection();
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_char_then_stop('}', Newline::Ignore)));
-    selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(3)));
+    selection.set_primary(
+        selection
+            .primary
+            .seek_forwards(CursorSeek::AdvanceByCharCount(3)),
+    );
     println!("ROWS COLS: {:?}", selection.primary.to_rows_cols());
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::advance_until_matching_delimiter(Inclusivity::Inclusive)));
     // selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));

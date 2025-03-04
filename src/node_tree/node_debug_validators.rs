@@ -1,8 +1,11 @@
 use crate::node_tree::node::{InMemoryNode, NodeMetadata, TokenKindTrait};
-use std::{cell::RefCell, rc::Rc};
 use std::fmt::Debug;
+use std::{cell::RefCell, rc::Rc};
 
-fn nodes_equal_by_hueristic<TokenKind: TokenKindTrait>(a: &Rc<RefCell<InMemoryNode<TokenKind>>>, b: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> bool {
+fn nodes_equal_by_hueristic<TokenKind: TokenKindTrait>(
+    a: &Rc<RefCell<InMemoryNode<TokenKind>>>,
+    b: &Rc<RefCell<InMemoryNode<TokenKind>>>,
+) -> bool {
     a.borrow().index == b.borrow().index
 }
 
@@ -13,7 +16,10 @@ pub enum NodeNextValidReason<TokenKind: TokenKindTrait> {
     ExpectedFirstChild(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
     UnsetExpectedNextSibling,
     ExpectedNextSibling(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
-    UnsetExpectedRecursiveSibling(NodeMetadata<TokenKind>, usize /* levels_upwards_traversed */),
+    UnsetExpectedRecursiveSibling(
+        NodeMetadata<TokenKind>,
+        usize, /* levels_upwards_traversed */
+    ),
     ExpectedRecursiveSibling(NodeMetadata<TokenKind>, NodeMetadata<TokenKind>),
     SetExpectedEOF(NodeMetadata<TokenKind>),
     ParentWeakRefMissing,
@@ -174,7 +180,9 @@ pub enum NodePreviousValidReason<TokenKind: TokenKindTrait> {
     InIsolatedTree,
 }
 
-pub fn validate_node_previous<TokenKind: TokenKindTrait>(wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>) -> NodePreviousValidReason<TokenKind> {
+pub fn validate_node_previous<TokenKind: TokenKindTrait>(
+    wrapped_node: &Rc<RefCell<InMemoryNode<TokenKind>>>,
+) -> NodePreviousValidReason<TokenKind> {
     let node = wrapped_node.borrow();
 
     let node_previous = if let Some(node_previous) = node.previous.clone() {
@@ -227,9 +235,10 @@ pub fn validate_node_previous<TokenKind: TokenKindTrait>(wrapped_node: &Rc<RefCe
                         let mut levels_downwards_traversed = 0;
                         loop {
                             let cursor_node_cloned = cursor_node.borrow().clone();
-                            let Some(last_child) = cursor_node_cloned.children.last().clone() else {
-                            break;
-                        };
+                            let Some(last_child) = cursor_node_cloned.children.last().clone()
+                            else {
+                                break;
+                            };
                             cursor_node = last_child.clone();
                             levels_downwards_traversed += 1;
                         }

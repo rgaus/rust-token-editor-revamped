@@ -1,9 +1,9 @@
 use crate::node_tree::{
-    cursor::{Selection, CursorSeek, cursor_seek::CursorSeekContext},
+    cursor::{cursor_seek::CursorSeekContext, CursorSeek, Selection},
     node::{InMemoryNode, NodeSeek, TokenKindTrait},
     utils::{Direction, Inclusivity, NEWLINE},
 };
-use std::{cell::RefCell, rc::Rc, fmt::Debug, collections::VecDeque};
+use std::{cell::RefCell, collections::VecDeque, fmt::Debug, rc::Rc};
 
 /// A cursor represents a position in a node tree - ie, a node and an offset in characters from the
 /// start of that node. A cursor can be seeked forwards and backwards through the node tree to get
@@ -17,10 +17,10 @@ pub struct Cursor<TokenKind: TokenKindTrait> {
 impl<TokenKind: TokenKindTrait> Debug for Cursor<TokenKind> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Cursor")
-         .field(&self.node.borrow().metadata)
-         .field(&self.node.borrow().index)
-         .field(&self.offset)
-         .finish()
+            .field(&self.node.borrow().metadata)
+            .field(&self.node.borrow().index)
+            .field(&self.offset)
+            .finish()
     }
 }
 
@@ -56,7 +56,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
     pub fn new_at(node: Rc<RefCell<InMemoryNode<TokenKind>>>, offset: usize) -> Self {
         Self { node, offset }
     }
-    pub fn new_at_rows_cols(root: Rc<RefCell<InMemoryNode<TokenKind>>>, rows_cols: (usize, usize)) -> Self {
+    pub fn new_at_rows_cols(
+        root: Rc<RefCell<InMemoryNode<TokenKind>>>,
+        rows_cols: (usize, usize),
+    ) -> Self {
         let (rows, cols) = rows_cols;
         let mut row_counter = 1;
         let mut col_counter = 1;
@@ -131,7 +134,11 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
     /// When called, seeks starting at the cursor position character by character through the node
     /// structure in the giren `direction` until the given `until_fn` returns either `Stop` or `Done`.
-    pub fn seek_until<UntilFn>(self: &Self, initial_direction: Direction, mut until_fn: UntilFn) -> Self
+    pub fn seek_until<UntilFn>(
+        self: &Self,
+        initial_direction: Direction,
+        mut until_fn: UntilFn,
+    ) -> Self
     where
         UntilFn: FnMut(char, usize) -> CursorSeek,
     {
@@ -157,160 +164,277 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
         // To handle CursorSeek::AdvanceUntil(...), keep a stack of `until_fn`s and their
         // corresponding counts - these should always have the same length:
-        let mut advance_until_fn_stack: Vec<Rc<RefCell<dyn FnMut(char, CursorSeekContext) -> CursorSeek>>> =
-            vec![];
+        let mut advance_until_fn_stack: Vec<
+            Rc<RefCell<dyn FnMut(char, CursorSeekContext) -> CursorSeek>>,
+        > = vec![];
         let mut advance_until_char_counter_stack: Vec<usize> = vec![];
 
-        let _ = InMemoryNode::seek_until(&self.node, direction, Inclusivity::Inclusive, |node, ct| {
-            new_node = node.clone();
+        let _ = InMemoryNode::seek_until(
+            &self.node,
+            direction,
+            Inclusivity::Inclusive,
+            |node, ct| {
+                new_node = node.clone();
 
-            let direction_at_start_of_node = direction.clone();
+                let direction_at_start_of_node = direction.clone();
 
-            let node_literal = InMemoryNode::literal(node);
-            let mut characters = if ct == 0 {
-                // If this is the first node, skip forward / backward `self.offset` times.
-                match direction {
-                    Direction::Forwards => {
-                        // Seek from the start to the offset
-                        node_literal.chars().skip(self.offset).collect::<VecDeque<char>>()
-                    },
-                    Direction::Backwards => {
-                        // Seek from the end to the offset from the start
-                        let mut iterator = node_literal.chars();
-                        for _ in 0..(node_literal.len()-self.offset) {
-                            iterator.next_back();
-                        };
-                        iterator.collect::<VecDeque<char>>()
-                    },
-                }
-            } else {
-                // If this is not the first node, then make sure to reset the offset to either the
-                // start or end of the node so that increments / decrements later are operating on
-                // the right value.
-                new_offset = match direction {
-                    Direction::Forwards => 0,
-                    Direction::Backwards => node_literal.len(),
+                let node_literal = InMemoryNode::literal(node);
+                let mut characters = if ct == 0 {
+                    // If this is the first node, skip forward / backward `self.offset` times.
+                    match direction {
+                        Direction::Forwards => {
+                            // Seek from the start to the offset
+                            node_literal
+                                .chars()
+                                .skip(self.offset)
+                                .collect::<VecDeque<char>>()
+                        }
+                        Direction::Backwards => {
+                            // Seek from the end to the offset from the start
+                            let mut iterator = node_literal.chars();
+                            for _ in 0..(node_literal.len() - self.offset) {
+                                iterator.next_back();
+                            }
+                            iterator.collect::<VecDeque<char>>()
+                        }
+                    }
+                } else {
+                    // If this is not the first node, then make sure to reset the offset to either the
+                    // start or end of the node so that increments / decrements later are operating on
+                    // the right value.
+                    new_offset = match direction {
+                        Direction::Forwards => 0,
+                        Direction::Backwards => node_literal.len(),
+                    };
+
+                    node_literal.chars().collect::<VecDeque<char>>()
                 };
 
-                node_literal.chars().collect::<VecDeque<char>>()
-            };
-
-            // Iterate over all characters within the node, one by one, until a match occurs:
-            while let Some(character) = match direction {
-                Direction::Forwards => characters.pop_front(),
-                Direction::Backwards => characters.pop_back(),
-            } {
-                // println!("INITIAL NEW_OFFSET: {new_offset} ({global_char_counter}, {character})");
-                // If there's a char_until_count, then run until that exhausts iself
-                if cached_char_until_count > 0 {
-                    cached_char_until_count -= 1;
-
+                // Iterate over all characters within the node, one by one, until a match occurs:
+                while let Some(character) = match direction {
+                    Direction::Forwards => characters.pop_front(),
+                    Direction::Backwards => characters.pop_back(),
+                } {
+                    // println!("INITIAL NEW_OFFSET: {new_offset} ({global_char_counter}, {character})");
+                    // If there's a char_until_count, then run until that exhausts iself
                     if cached_char_until_count > 0 {
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
-                        continue;
-                    }
-                }
+                        cached_char_until_count -= 1;
 
-                // If there's a line_until_count, then run until that exhausts iself
-                if cached_line_until_count > 0 {
-                    dbg!(cached_line_until_count, &cached_line_state);
-
-                    if cached_line_state == AdvanceByLineCountState::Inactive {
-                        println!("--- LINE START! ---");
-                        // 1. Figure out how many characters are before the current cursor in the
-                        //    line
-                        let mut current_cols = self.offset + 1;
-                        let _ = InMemoryNode::seek_until(&self.node, Direction::Backwards, Inclusivity::Exclusive, |inner_node, _ct| {
-                            for inner_character in InMemoryNode::literal(inner_node).chars().rev() {
-                                if inner_character == *NEWLINE {
-                                    return NodeSeek::Stop;
-                                }
-                                current_cols += 1;
-                            }
-                            return NodeSeek::Continue(());
-                        });
-
-                        cached_line_state = AdvanceByLineCountState::ScanningForwardTowardsNewline {
-                            chars_before_start: current_cols+1,
-                        };
-                    }
-
-                    match cached_line_state {
-                        AdvanceByLineCountState::Inactive => {
-                            unreachable!("AdvanceByLineCountState::Inactive should have been handled earlier in the control flow!");
-                        },
-                        AdvanceByLineCountState::ScanningForwardTowardsNewline { chars_before_start } => {
+                        if cached_char_until_count > 0 {
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
                                 Direction::Backwards => new_offset - 1,
                             };
-
-                            // 2. If the first newline hasn't been reached, then keep going until it is
-                            // reached
-                            if character == *NEWLINE {
-                                cached_line_state = AdvanceByLineCountState::AdvancingCharactersOnNextLine {
-                                    remaining: chars_before_start,
-                                };
-                            };
                             continue;
-                        },
-                        AdvanceByLineCountState::AdvancingCharactersOnNextLine { remaining } => {
-                            let mut remaining_copy = remaining;
-                            if remaining_copy > 0 {
-                                // 3. Advance cached_line_current_cols (in this context, chars_before_start) characters 
-                                //    to get to the next line
-                                remaining_copy -= 1;
-                                cached_line_state = AdvanceByLineCountState::AdvancingCharactersOnNextLine {
-                                    remaining: remaining_copy,
-                                };
-                            }
+                        }
+                    }
 
-                            if remaining_copy > 0 {
+                    // If there's a line_until_count, then run until that exhausts iself
+                    if cached_line_until_count > 0 {
+                        dbg!(cached_line_until_count, &cached_line_state);
+
+                        if cached_line_state == AdvanceByLineCountState::Inactive {
+                            println!("--- LINE START! ---");
+                            // 1. Figure out how many characters are before the current cursor in the
+                            //    line
+                            let mut current_cols = self.offset + 1;
+                            let _ = InMemoryNode::seek_until(
+                                &self.node,
+                                Direction::Backwards,
+                                Inclusivity::Exclusive,
+                                |inner_node, _ct| {
+                                    for inner_character in
+                                        InMemoryNode::literal(inner_node).chars().rev()
+                                    {
+                                        if inner_character == *NEWLINE {
+                                            return NodeSeek::Stop;
+                                        }
+                                        current_cols += 1;
+                                    }
+                                    return NodeSeek::Continue(());
+                                },
+                            );
+
+                            cached_line_state =
+                                AdvanceByLineCountState::ScanningForwardTowardsNewline {
+                                    chars_before_start: current_cols + 1,
+                                };
+                        }
+
+                        match cached_line_state {
+                            AdvanceByLineCountState::Inactive => {
+                                unreachable!("AdvanceByLineCountState::Inactive should have been handled earlier in the control flow!");
+                            }
+                            AdvanceByLineCountState::ScanningForwardTowardsNewline {
+                                chars_before_start,
+                            } => {
                                 global_char_counter += 1;
                                 new_offset = match direction {
                                     Direction::Forwards => new_offset + 1,
                                     Direction::Backwards => new_offset - 1,
                                 };
+
+                                // 2. If the first newline hasn't been reached, then keep going until it is
+                                // reached
+                                if character == *NEWLINE {
+                                    cached_line_state =
+                                        AdvanceByLineCountState::AdvancingCharactersOnNextLine {
+                                            remaining: chars_before_start,
+                                        };
+                                };
                                 continue;
                             }
+                            AdvanceByLineCountState::AdvancingCharactersOnNextLine {
+                                remaining,
+                            } => {
+                                let mut remaining_copy = remaining;
+                                if remaining_copy > 0 {
+                                    // 3. Advance cached_line_current_cols (in this context, chars_before_start) characters
+                                    //    to get to the next line
+                                    remaining_copy -= 1;
+                                    cached_line_state =
+                                        AdvanceByLineCountState::AdvancingCharactersOnNextLine {
+                                            remaining: remaining_copy,
+                                        };
+                                }
 
-                            cached_line_until_count -= 1;
-                            cached_line_state = AdvanceByLineCountState::Inactive;
-                            println!("--- LINE DONE! --- cached_line_until_count={}", cached_line_until_count);
+                                if remaining_copy > 0 {
+                                    global_char_counter += 1;
+                                    new_offset = match direction {
+                                        Direction::Forwards => new_offset + 1,
+                                        Direction::Backwards => new_offset - 1,
+                                    };
+                                    continue;
+                                }
 
-                            if cached_line_until_count > 0 {
-                                continue;
+                                cached_line_until_count -= 1;
+                                cached_line_state = AdvanceByLineCountState::Inactive;
+                                println!(
+                                    "--- LINE DONE! --- cached_line_until_count={}",
+                                    cached_line_until_count
+                                );
+
+                                if cached_line_until_count > 0 {
+                                    continue;
+                                }
                             }
-                        },
+                        }
                     }
-                }
 
-                // If there's a char_until_fn, then run until that passes
-                if let (Some(advance_until_fn), Some(advance_until_char_counter)) = (
-                    &advance_until_fn_stack.last(),
-                    advance_until_char_counter_stack.last(),
-                ) {
-                    let value = {
-                        let mut until_fn_borrowed_mut = advance_until_fn.borrow_mut();
-                        until_fn_borrowed_mut(character, CursorSeekContext {
-                            direction,
-                            index: *advance_until_char_counter
-                        })
-                    };
+                    // If there's a char_until_fn, then run until that passes
+                    if let (Some(advance_until_fn), Some(advance_until_char_counter)) = (
+                        &advance_until_fn_stack.last(),
+                        advance_until_char_counter_stack.last(),
+                    ) {
+                        let value = {
+                            let mut until_fn_borrowed_mut = advance_until_fn.borrow_mut();
+                            until_fn_borrowed_mut(
+                                character,
+                                CursorSeekContext {
+                                    direction,
+                                    index: *advance_until_char_counter,
+                                },
+                            )
+                        };
 
-                    match value {
+                        match value {
+                            CursorSeek::Continue => {
+                                global_char_counter += 1;
+                                new_offset = match direction {
+                                    Direction::Forwards => new_offset + 1,
+                                    Direction::Backwards => new_offset - 1,
+                                };
+                                *advance_until_char_counter_stack.last_mut().unwrap() += 1;
+                                continue;
+                            }
+                            CursorSeek::AdvanceByLines(n) => {
+                                if n == 0 {
+                                    continue;
+                                };
+                                cached_line_until_count += n;
+
+                                // NOTE: re-add the character back to the characters vec, so that it
+                                // can be skipped with the AdvanceByCharCount skip code
+                                match direction {
+                                    Direction::Forwards => characters.push_front(character),
+                                    Direction::Backwards => characters.push_back(character),
+                                };
+                                continue;
+                            }
+                            CursorSeek::AdvanceByCharCount(n) => {
+                                cached_char_until_count += n + 1;
+
+                                // NOTE: re-add the character back to the characters vec, so that it
+                                // can be skipped with the AdvanceByCharCount skip code
+                                match direction {
+                                    Direction::Forwards => characters.push_front(character),
+                                    Direction::Backwards => characters.push_back(character),
+                                };
+                                continue;
+                            }
+                            CursorSeek::AdvanceUntil {
+                                until_fn: char_until_fn,
+                                only_in_direction,
+                            } => {
+                                if only_in_direction.is_some_and(|d| d != direction) {
+                                    panic!("CursorSeek::AdvanceUntil only_in_direction was {only_in_direction:?}, but direction was {direction:?}. This is not allowed!");
+                                };
+                                advance_until_fn_stack.push(char_until_fn);
+                                advance_until_char_counter_stack.push(0);
+
+                                // NOTE: re-add the character back to the characters vec, so that it
+                                // can be skipped with the AdvanceByCharCount skip code
+                                match direction {
+                                    Direction::Forwards => characters.push_front(character),
+                                    Direction::Backwards => characters.push_back(character),
+                                };
+                                continue;
+                            }
+                            CursorSeek::Stop => {
+                                advance_until_fn_stack.pop();
+                                advance_until_char_counter_stack.pop();
+                            }
+                            CursorSeek::Done => {
+                                global_char_counter += 1;
+                                new_offset = match direction {
+                                    Direction::Forwards => new_offset + 1,
+                                    Direction::Backwards => new_offset - 1,
+                                };
+
+                                advance_until_fn_stack.pop();
+                                advance_until_char_counter_stack.pop();
+                            }
+                            CursorSeek::ChangeDirection(new_direction) => {
+                                direction = new_direction;
+                                continue;
+                            }
+                        }
+                        if !advance_until_fn_stack.is_empty()
+                            || !advance_until_char_counter_stack.is_empty()
+                        {
+                            continue;
+                        }
+                    }
+
+                    match until_fn(character, global_char_counter) {
                         CursorSeek::Continue => {
                             global_char_counter += 1;
                             new_offset = match direction {
                                 Direction::Forwards => new_offset + 1,
                                 Direction::Backwards => new_offset - 1,
                             };
-                            *advance_until_char_counter_stack.last_mut().unwrap() += 1;
+                            continue;
+                        }
+                        CursorSeek::AdvanceByCharCount(n) => {
+                            cached_char_until_count += n + 1;
+
+                            // NOTE: re-add the character back to the characters vec, so that it
+                            // can be skipped with the AdvanceByCharCount skip code
+                            match direction {
+                                Direction::Forwards => characters.push_front(character),
+                                Direction::Backwards => characters.push_back(character),
+                            };
                             continue;
                         }
                         CursorSeek::AdvanceByLines(n) => {
@@ -327,18 +451,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             };
                             continue;
                         }
-                        CursorSeek::AdvanceByCharCount(n) => {
-                            cached_char_until_count += n+1;
-
-                            // NOTE: re-add the character back to the characters vec, so that it
-                            // can be skipped with the AdvanceByCharCount skip code
-                            match direction {
-                                Direction::Forwards => characters.push_front(character),
-                                Direction::Backwards => characters.push_back(character),
-                            };
-                            continue;
-                        }
-                        CursorSeek::AdvanceUntil { until_fn: char_until_fn, only_in_direction } => {
+                        CursorSeek::AdvanceUntil {
+                            until_fn: char_until_fn,
+                            only_in_direction,
+                        } => {
                             if only_in_direction.is_some_and(|d| d != direction) {
                                 panic!("CursorSeek::AdvanceUntil only_in_direction was {only_in_direction:?}, but direction was {direction:?}. This is not allowed!");
                             };
@@ -354,8 +470,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             continue;
                         }
                         CursorSeek::Stop => {
-                            advance_until_fn_stack.pop();
-                            advance_until_char_counter_stack.pop();
+                            return NodeSeek::Done(());
                         }
                         CursorSeek::Done => {
                             global_char_counter += 1;
@@ -363,98 +478,25 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                                 Direction::Forwards => new_offset + 1,
                                 Direction::Backwards => new_offset - 1,
                             };
-
-                            advance_until_fn_stack.pop();
-                            advance_until_char_counter_stack.pop();
-                        },
+                            return NodeSeek::Done(());
+                        }
                         CursorSeek::ChangeDirection(new_direction) => {
                             direction = new_direction;
                             continue;
-                        },
-                    }
-                    if !advance_until_fn_stack.is_empty()
-                        || !advance_until_char_counter_stack.is_empty()
-                    {
-                        continue;
+                        }
                     }
                 }
 
-                match until_fn(character, global_char_counter) {
-                    CursorSeek::Continue => {
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
-                        continue;
-                    }
-                    CursorSeek::AdvanceByCharCount(n) => {
-                        cached_char_until_count += n+1;
-
-                        // NOTE: re-add the character back to the characters vec, so that it
-                        // can be skipped with the AdvanceByCharCount skip code
-                        match direction {
-                            Direction::Forwards => characters.push_front(character),
-                            Direction::Backwards => characters.push_back(character),
-                        };
-                        continue;
-                    }
-                    CursorSeek::AdvanceByLines(n) => {
-                        if n == 0 {
-                            continue;
-                        };
-                        cached_line_until_count += n;
-
-                        // NOTE: re-add the character back to the characters vec, so that it
-                        // can be skipped with the AdvanceByCharCount skip code
-                        match direction {
-                            Direction::Forwards => characters.push_front(character),
-                            Direction::Backwards => characters.push_back(character),
-                        };
-                        continue;
-                    }
-                    CursorSeek::AdvanceUntil { until_fn: char_until_fn, only_in_direction } => {
-                        if only_in_direction.is_some_and(|d| d != direction) {
-                            panic!("CursorSeek::AdvanceUntil only_in_direction was {only_in_direction:?}, but direction was {direction:?}. This is not allowed!");
-                        };
-                        advance_until_fn_stack.push(char_until_fn);
-                        advance_until_char_counter_stack.push(0);
-
-                        // NOTE: re-add the character back to the characters vec, so that it
-                        // can be skipped with the AdvanceByCharCount skip code
-                        match direction {
-                            Direction::Forwards => characters.push_front(character),
-                            Direction::Backwards => characters.push_back(character),
-                        };
-                        continue;
-                    }
-                    CursorSeek::Stop => {
-                        return NodeSeek::Done(());
-                    }
-                    CursorSeek::Done => {
-                        global_char_counter += 1;
-                        new_offset = match direction {
-                            Direction::Forwards => new_offset + 1,
-                            Direction::Backwards => new_offset - 1,
-                        };
-                        return NodeSeek::Done(());
-                    },
-                    CursorSeek::ChangeDirection(new_direction) => {
-                        direction = new_direction;
-                        continue;
-                    },
+                // The whole node has been parsed! If the direction changed half way through though
+                // then change the node seek direction so that the correct node in the proper direction
+                // is selected next.
+                if direction_at_start_of_node != direction {
+                    NodeSeek::ChangeDirection((), direction)
+                } else {
+                    NodeSeek::Continue(())
                 }
-            }
-
-            // The whole node has been parsed! If the direction changed half way through though
-            // then change the node seek direction so that the correct node in the proper direction
-            // is selected next.
-            if direction_at_start_of_node != direction {
-                NodeSeek::ChangeDirection((), direction)
-            } else {
-                NodeSeek::Continue(())
-            }
-        });
+            },
+        );
 
         Self::new_at(new_node, new_offset)
     }
