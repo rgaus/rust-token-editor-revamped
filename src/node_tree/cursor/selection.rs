@@ -505,12 +505,8 @@ mod tests {
         assert_eq!(selection.literal(), "Lorem ipsum d");
 
         // Forwards three words INCLUSIVE
-        println!("------");
         let mut selection = selection.perform_inclusive(move |primary, secondary| {
-            let primary = primary
-                .seek_forwards(CursorSeek::forwards_word(1, false, false))
-                .seek_forwards(CursorSeek::forwards_word(1, false, false))
-                .seek_forwards(CursorSeek::forwards_word(1, false, false));
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(3, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 29));
@@ -518,11 +514,8 @@ mod tests {
         assert_eq!(selection.literal(), "Lorem ipsum dolor sit amet, ");
 
         // Forwards two words EXCLUSIVE
-        println!("------");
         let mut selection = selection.perform_exclusive(move |primary, secondary| {
-            let primary = primary
-                .seek_forwards(CursorSeek::forwards_word(1, false, false))
-                .seek_forwards(CursorSeek::forwards_word(1, false, false));
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(2, false, false));
             (primary, secondary)
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 53));
@@ -550,7 +543,6 @@ mod tests {
         });
         assert_eq!(selection.primary.to_rows_cols(), (1, 53));
 
-        println!("------");
         // Backwards one word INCLUSIVE
         let mut selection = selection.perform_inclusive(move |primary, secondary| {
             let primary = primary.seek_backwards(CursorSeek::back_word(1, false, false));
