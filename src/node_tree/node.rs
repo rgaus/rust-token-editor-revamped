@@ -18,6 +18,7 @@ pub enum NodeSeek<Item> {
     Stop,                             // Finish and don't include this token
     Done(Item),                       // Finish and do include this token
     ChangeDirection(Item, Direction), // "Continue" the current node, and then switch direction
+    Fail(&'static str),               // An error happened while processing, terminate
 }
 
 /// A trait that any new language definition must implement, which tells the system how to properly
@@ -1126,7 +1127,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         initial_direction: Direction,
         current_node_included: Inclusivity,
         mut until_fn: UntilFn,
-    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
+    ) -> Result<impl std::iter::DoubleEndedIterator<Item = ResultItem>, String>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
@@ -1146,7 +1147,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         };
         let Some(mut cursor) = cursor else {
             // The cursor node is None, so bail early!
-            return (vec![]).into_iter();
+            return Ok((vec![]).into_iter());
         };
 
         let mut output = vec![];
@@ -1233,10 +1234,13 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 (NodeSeek::ChangeDirection(_, _), _) => {
                     continue;
                 }
+                (NodeSeek::Fail(message), _) => {
+                    return Err(message.into());
+                }
             }
         }
 
-        output.into_iter()
+        Ok(output.into_iter())
     }
 
     /// Given a starting node `node`, seek forwards via next, calling `until_fn` repeatedly for
@@ -1251,7 +1255,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         node: &Rc<RefCell<Self>>,
         current_node_included: Inclusivity,
         until_fn: UntilFn,
-    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
+    ) -> Result<impl std::iter::DoubleEndedIterator<Item = ResultItem>, String>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
@@ -1270,7 +1274,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         node: &Rc<RefCell<Self>>,
         current_node_included: Inclusivity,
         until_fn: UntilFn,
-    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
+    ) -> Result<impl std::iter::DoubleEndedIterator<Item = ResultItem>, String>
     // ) -> std::vec::IntoIter<ResultItem>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
@@ -1288,7 +1292,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
         start_node: &Rc<RefCell<Self>>,
         start_node_included: Inclusivity,
         mut until_fn: UntilFn,
-    ) -> impl std::iter::DoubleEndedIterator<Item = ResultItem>
+    ) -> Result<impl std::iter::DoubleEndedIterator<Item = ResultItem>, String>
     where
         UntilFn: FnMut(&Rc<RefCell<Self>>, usize) -> NodeSeek<ResultItem>,
     {
@@ -1300,10 +1304,11 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
                 NodeSeek::Continue(value) => NodeSeek::Continue((node.clone(), value)),
                 NodeSeek::Done(value) => NodeSeek::Done((node.clone(), value)),
                 NodeSeek::Stop => NodeSeek::Stop,
-                NodeSeek::ChangeDirection(_, _) => unimplemented!("NodeSeek::ChangeDirection makes no sense in the context of InMemoryNode::remove_nodes_sequentially_until!")
+                NodeSeek::ChangeDirection(_, _) => unimplemented!("NodeSeek::ChangeDirection makes no sense in the context of InMemoryNode::remove_nodes_sequentially_until!"),
+                NodeSeek::Fail(message) => NodeSeek::Fail(message)
             }
             },
-        );
+        )?;
 
         let (nodes, values): (Vec<_>, Vec<_>) = node_value_pairs.unzip();
 
@@ -1341,7 +1346,7 @@ impl<TokenKind: TokenKindTrait> InMemoryNode<TokenKind> {
             }
         }
 
-        values.into_iter()
+        Ok(values.into_iter())
     }
 }
 

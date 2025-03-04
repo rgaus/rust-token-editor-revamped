@@ -10,6 +10,7 @@ pub enum CursorSeek {
     Continue,                  // Seek to the next character
     Stop,                      // Finish and don't include this character
     Done,                      // Finish and do include this character
+    Fail(&'static str),        // The seek didn't occur successfully, throw an error
     AdvanceByCharCount(usize), // Advance by N chars before checking again
     AdvanceByLines(usize),     // Advance by N lines before checking again
     AdvanceUntil {

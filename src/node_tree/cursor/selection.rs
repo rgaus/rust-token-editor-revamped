@@ -196,6 +196,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
 
         // 4. Combine it all together!
         let in_between = in_between_node_literals
+            .expect("generate_literal seek_forwards_until failed")
             .fold::<ColoredString, _>("".into(), |acc, colored_str| {
                 format!("{}{}", acc, colored_str).into()
             });
@@ -342,7 +343,7 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
                     NodeSeek::Done(Some(literal))
                 }
             },
-        );
+        )?;
 
         let collected = resulting_literal_vectors
             .filter_map(|n| n)

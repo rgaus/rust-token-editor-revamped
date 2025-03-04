@@ -409,6 +409,9 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                                 direction = new_direction;
                                 continue;
                             }
+                            CursorSeek::Fail(message) => {
+                                return NodeSeek::Fail(message);
+                            }
                         }
                         if !advance_until_fn_stack.is_empty()
                             || !advance_until_char_counter_stack.is_empty()
@@ -483,6 +486,9 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         CursorSeek::ChangeDirection(new_direction) => {
                             direction = new_direction;
                             continue;
+                        }
+                        CursorSeek::Fail(message) => {
+                            return NodeSeek::Fail(message);
                         }
                     }
                 }
