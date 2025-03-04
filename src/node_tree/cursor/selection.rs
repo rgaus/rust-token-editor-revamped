@@ -560,13 +560,13 @@ mod tests {
         assert_eq!(selection.primary.to_rows_cols(), (1, 41));
         assert_eq!(selection.secondary.to_rows_cols(), (1, 53));
 
-        // // Backwards one word EXCLUSIVE
-        // let mut selection = selection.perform_exclusive(move |primary, secondary| {
-        //     let primary = primary.seek_backwards(CursorSeek::back_word(false, false));
-        //     (primary, secondary)
-        // });
-        // assert_eq!(selection.primary.to_rows_cols(), (1, 29));
-        // assert_eq!(selection.secondary.to_rows_cols(), (1, 54));
-        // assert_eq!(selection.literal(), "consectetur adipiscing el");
+        // Backwards one word EXCLUSIVE
+        let mut selection = selection.perform_exclusive(move |primary, secondary| {
+            let primary = primary.seek_backwards(CursorSeek::back_word(1, false, false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 29));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 54));
+        assert_eq!(selection.literal(), "consectetur adipiscing el");
     }
 }
