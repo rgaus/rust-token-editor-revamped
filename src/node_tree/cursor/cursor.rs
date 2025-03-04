@@ -414,6 +414,30 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                             }
                             CursorSeek::ChangeDirection(new_direction) => {
                                 direction = new_direction;
+
+                                new_offset = match direction {
+                                    Direction::Forwards => new_offset - 1,
+                                    Direction::Backwards => new_offset + 1,
+                                };
+
+                                characters = match new_direction {
+                                    Direction::Forwards => {
+                                        // Seek from the start to the offset
+                                        node_literal
+                                            .chars()
+                                            .skip(new_offset)
+                                            .collect::<VecDeque<char>>()
+                                        }
+                                    Direction::Backwards => {
+                                        // Seek from the end to the offset from the start
+                                        let mut iterator = node_literal.chars();
+                                        for _ in 0..(node_literal.len() - new_offset) {
+                                            iterator.next_back();
+                                        }
+                                        iterator.collect::<VecDeque<char>>()
+                                    }
+                                };
+
                                 continue;
                             }
                             CursorSeek::Fail(message) => {
@@ -492,6 +516,29 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                         }
                         CursorSeek::ChangeDirection(new_direction) => {
                             direction = new_direction;
+
+                            new_offset = match direction {
+                                Direction::Forwards => new_offset - 1,
+                                Direction::Backwards => new_offset + 1,
+                            };
+
+                            characters = match new_direction {
+                                Direction::Forwards => {
+                                    // Seek from the start to the offset
+                                    node_literal
+                                        .chars()
+                                        .skip(new_offset)
+                                        .collect::<VecDeque<char>>()
+                                    }
+                                Direction::Backwards => {
+                                    // Seek from the end to the offset from the start
+                                    let mut iterator = node_literal.chars();
+                                    for _ in 0..(node_literal.len() - new_offset) {
+                                        iterator.next_back();
+                                    }
+                                    iterator.collect::<VecDeque<char>>()
+                                }
+                            };
                             continue;
                         }
                         CursorSeek::Fail(message) => {

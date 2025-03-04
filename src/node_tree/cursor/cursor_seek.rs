@@ -178,6 +178,7 @@ impl CursorSeek {
             Three(VimClass),
             Four,
             Five,
+            Six,
         }
         let mut mode = Mode::Initial;
         let mut loop_count = count;
@@ -211,7 +212,7 @@ impl CursorSeek {
                     } else {
                         // overshot - forward one
                         mode = Mode::Four;
-                        CursorSeek::Continue
+                        CursorSeek::ChangeDirection(Direction::Forwards)
                     }
                 }
 
@@ -255,27 +256,30 @@ impl CursorSeek {
                     if current_class == *previous_class {
                         CursorSeek::Continue
                     } else {
+                        // overshot - forward one
                         mode = Mode::Four;
-                        CursorSeek::Continue
+                        CursorSeek::ChangeDirection(Direction::Forwards)
                     }
                 }
-
-                // overshot - forward one
                 Mode::Four => {
                     println!("4. c={c}");
                     mode = Mode::Five;
-                    CursorSeek::ChangeDirection(Direction::Forwards)
-                }
+                    CursorSeek::Continue
+                },
                 Mode::Five => {
                     println!("5. c={c}");
-
+                    mode = Mode::Six;
+                    CursorSeek::ChangeDirection(Direction::Backwards)
+                },
+                Mode::Six => {
                     stop_value = false;
 
                     // Loop around again if there are still iterations to go
                     loop_count -= 1;
                     if loop_count > 0 {
-                        mode = Mode::Initial;
-                        CursorSeek::AdvanceByCharCount(1)
+                        let starting_class = vim_cls(c, is_big_word);
+                        mode = Mode::One(starting_class);
+                        CursorSeek::Continue
                     } else {
                         CursorSeek::Done
                     }

@@ -552,13 +552,13 @@ mod tests {
         assert_eq!(selection.primary.to_rows_cols(), (1, 41));
         assert_eq!(selection.secondary.to_rows_cols(), (1, 53));
 
-        // Backwards one word EXCLUSIVE
+        // Backwards two words EXCLUSIVE
         let mut selection = selection.perform_exclusive(move |primary, secondary| {
-            let primary = primary.seek_backwards(CursorSeek::back_word(1, false, false));
+            let primary = primary.seek_backwards(CursorSeek::back_word(2, false, false));
             (primary, secondary)
         });
-        assert_eq!(selection.primary.to_rows_cols(), (1, 29));
+        assert_eq!(selection.literal(), ", consectetur adipiscing el");
+        assert_eq!(selection.primary.to_rows_cols(), (1, 27));
         assert_eq!(selection.secondary.to_rows_cols(), (1, 54));
-        assert_eq!(selection.literal(), "consectetur adipiscing el");
     }
 }
