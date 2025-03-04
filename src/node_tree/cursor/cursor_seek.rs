@@ -124,7 +124,7 @@ impl CursorSeek {
                         "1. c={c} starting_class={starting_class} current_class={current_class}"
                     );
 
-                    if *starting_class != 0 && *starting_class == current_class {
+                    if *starting_class != VimClass::WhiteSpace && *starting_class == current_class {
                         mode = Mode::Two;
                         CursorSeek::Continue
                     } else {
@@ -146,7 +146,7 @@ impl CursorSeek {
                     // if (curwin->w_cursor.col == 0 && *ml_get_curline() == NUL)
                     // break;
 
-                    if current_class == 0 {
+                    if current_class == VimClass::WhiteSpace {
                         println!("space char!");
 
                         // Loop around again if there are still iterations to go
@@ -202,7 +202,7 @@ impl CursorSeek {
                     let current_class = vim_cls(c, is_big_word);
 
                     println!("1. c={c} starting_class={starting_class:?} current_class={current_class:?}");
-                    if !stop_value || *starting_class == current_class || *starting_class == 0 {
+                    if !stop_value || *starting_class == current_class || *starting_class == VimClass::WhiteSpace {
                         // if (curwin->w_cursor.col == 0
                         //               && LINEEMPTY(curwin->w_cursor.lnum))
                         //     goto finished;
@@ -223,7 +223,7 @@ impl CursorSeek {
                     let current_class = vim_cls(c, is_big_word);
                     println!("2. c={c} current_class={current_class:?}");
 
-                    if current_class == 0 {
+                    if current_class == VimClass::WhiteSpace {
                         // if (curwin->w_cursor.col == 0
                         //               && LINEEMPTY(curwin->w_cursor.lnum))
                         //     goto finished;

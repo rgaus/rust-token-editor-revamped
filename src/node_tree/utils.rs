@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::cursor::CursorSeek;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -96,7 +98,19 @@ pub fn is_delimiter(buffer: &[char]) -> Option<Delimiter> {
     }
 }
 
-pub type VimClass = usize;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum VimClass {
+    WhiteSpace = 0,
+    Punctuation = 1,
+    Keyword = 2,
+    Multibyte = 3,
+}
+impl Display for VimClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /*
  * cls() - returns the class of character at curwin->w_cursor
  *
@@ -106,18 +120,18 @@ pub type VimClass = usize;
  */
 pub fn vim_cls(c: char, cls_bigword: bool) -> VimClass {
     if c == ' ' || c == '\t' || c == '\0' {
-        0
+        VimClass::WhiteSpace
     } else if c.len_utf8() > 1 {
         // If cls_bigword, report multi-byte chars as class 1.
         if cls_bigword {
-            1
+            VimClass::Punctuation
         } else {
             // process code leading/trailing bytes
             // TODO: https://github.com/vim/vim/blob/659cb28c25b756e59c712c337f8b4650e85f8bcd/src/mbyte.c#L863
             // return dbcs_class(
             //     ((unsigned)c >> 8), (c & 0xFF)
             // );
-            3
+            VimClass::Multibyte
         }
     // } else if (enc_utf8) {
     //     // TODO: https://github.com/vim/vim/blob/659cb28c25b756e59c712c337f8b4650e85f8bcd/src/mbyte.c#L2901
@@ -129,10 +143,10 @@ pub fn vim_cls(c: char, cls_bigword: bool) -> VimClass {
     //     }
     } else if cls_bigword {
         // If cls_bigword is TRUE, report all non-blanks as class 1.
-        1
+        VimClass::Punctuation
     } else if is_lower_word_char(c) {
-        2
+        VimClass::Keyword
     } else {
-        1
+        VimClass::Punctuation
     }
 }
