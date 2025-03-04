@@ -20,17 +20,23 @@ pub enum CursorSeek {
     AdvanceByLines(usize),      // Advance by N lines before checking again
     AdvanceUntil {
         // Advance until the given `until_fn` check passes
-        until_fn: Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>,
+        until_fn: Rc<RefCell<dyn FnMut(char, CursorSeekContext) -> CursorSeek>>,
         // Optionally limit the operation to only run in a given direction
         only_in_direction: Option<Direction>,
     },
     ChangeDirection(Direction), // Change to seeking in the given direction
 }
 
+#[derive(Debug, Clone)]
+pub struct CursorSeekContext {
+    pub direction: Direction,
+    pub index: usize,
+}
+
 impl CursorSeek {
     pub fn advance_until<T>(until_fn: T) -> Self
     where
-        T: FnMut(char, usize) -> CursorSeek + 'static,
+        T: FnMut(char, CursorSeekContext) -> CursorSeek + 'static,
     {
         CursorSeek::AdvanceUntil {
             only_in_direction: None,
@@ -40,7 +46,7 @@ impl CursorSeek {
 
     pub fn advance_until_only<T>(direction: Direction, until_fn: T) -> Self
     where
-        T: FnMut(char, usize) -> CursorSeek + 'static,
+        T: FnMut(char, CursorSeekContext) -> CursorSeek + 'static,
     {
         CursorSeek::AdvanceUntil {
             only_in_direction: Some(direction),

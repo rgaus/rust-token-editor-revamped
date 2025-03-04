@@ -1,5 +1,5 @@
 use crate::node_tree::{
-    cursor::{Selection, CursorSeek},
+    cursor::{Selection, CursorSeek, cursor_seek::CursorSeekContext},
     node::{InMemoryNode, NodeSeek, TokenKindTrait},
     utils::{Direction, Inclusivity, NEWLINE},
 };
@@ -156,7 +156,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
 
         // To handle CursorSeek::AdvanceUntil(...), keep a stack of `until_fn`s and their
         // corresponding counts - these should always have the same length:
-        let mut advance_until_fn_stack: Vec<Rc<RefCell<dyn FnMut(char, usize) -> CursorSeek>>> =
+        let mut advance_until_fn_stack: Vec<Rc<RefCell<dyn FnMut(char, CursorSeekContext) -> CursorSeek>>> =
             vec![];
         let mut advance_until_char_counter_stack: Vec<usize> = vec![];
 
@@ -296,7 +296,10 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
                 ) {
                     let value = {
                         let mut until_fn_borrowed_mut = advance_until_fn.borrow_mut();
-                        until_fn_borrowed_mut(character, *advance_until_char_counter)
+                        until_fn_borrowed_mut(character, CursorSeekContext {
+                            direction,
+                            index: *advance_until_char_counter
+                        })
                     };
 
                     match value {
