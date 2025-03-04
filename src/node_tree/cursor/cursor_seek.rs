@@ -6,7 +6,7 @@ use crate::node_tree::utils::{
     NEWLINE,
     is_delimiter,
     Delimiter,
-    Direction, DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS,
+    Direction, DELIMITER_LOOKBACK_BUFFER_LENGTH_CHARS, vim_cls, VimClass,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -80,96 +80,187 @@ impl CursorSeek {
         })
     }
 
-    pub fn advance_lower_word(inclusive: Inclusivity) -> Self {
-        let final_seek = match inclusive {
-            Inclusivity::Inclusive => CursorSeek::Done,
-            Inclusivity::Exclusive => CursorSeek::Stop,
-        };
+    // ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L361
+    pub fn forwards_word(is_big_word: bool) -> Self {
         #[derive(Debug)]
         enum Mode {
             Initial,
-            HitFirstLowerWordChar,
-            SeekingThroughLeadingNonLowerWordChars,
-            SeekingThroughLeadingWhitespace,
+            One(VimClass),
+            Two,
         }
         let mut mode = Mode::Initial;
-
-        let mut hit_word_char = false;
 
         // From :h word -
         // A word consists of a sequence of letters, digits and underscores, or a
         // sequence of other non-blank characters, separated with white space (spaces,
         // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
         // is also considered to be a word.
-        CursorSeek::advance_until(move |c, _i| {
-            let a = match &mode {
+        CursorSeek::advance_until(move |c, _ctx| {
+            match &mode {
                 Mode::Initial => {
-                    if is_lower_word_char(c) {
-                        mode = Mode::HitFirstLowerWordChar;
-                        CursorSeek::Continue
-                    } else if c == *NEWLINE || c.is_whitespace() {
-                        mode = Mode::SeekingThroughLeadingWhitespace;
-                        CursorSeek::Continue
-                    } else {
-                        mode = Mode::SeekingThroughLeadingNonLowerWordChars;
-                        CursorSeek::Continue
-                    }
-                },
-                Mode::HitFirstLowerWordChar => {
-                    if is_lower_word_char(c) {
-                        // If a word character, keep going
-                        CursorSeek::Continue
-                    } else {
-                        Inclusivity::to_cursor_seek(&inclusive)
-                    }
-                },
-                Mode::SeekingThroughLeadingWhitespace | Mode::SeekingThroughLeadingNonLowerWordChars => {
-                    if c.is_whitespace() {
-                        CursorSeek::Continue
-                    } else {
-                        CursorSeek::Stop
-                    }
-                },
-            };
+                    let starting_class = vim_cls(c, is_big_word);
+                    mode = Mode::One(starting_class);
 
-            a
-        //     if stop {
-        //         CursorSeek::Stop
+                    /*
+                     * We always move at least one character, unless on the last
+                     * character in the buffer.
+                     */
+                    // last_line = (curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count);
+                    CursorSeek::Continue
+                    // i = inc_cursor();
+                    // if (i == -1 || (i >= 1 && last_line)) // started at last char in file
+                    //     return FAIL;
+                    // if (i >= 1 && eol && count == 0)      // started at last char in line
+                    //     return OK;
+                },
 
-        //     // set iskeyword? @,48-57,_,192-255
-        //     } else if is_lower_word_char(c) {
-        //         // If a word character, keep going
-        //         hit_word_char = true;
-        //         CursorSeek::Continue
-        //     } else if !hit_word_char && c == '\n' {
-        //         // If a newline, then advance until whitespace after that new line stops
-        //         CursorSeek::advance_until(move |c, _i| {
-        //             if c.is_whitespace() {
-        //                 CursorSeek::Continue
-        //             } else {
-        //                 CursorSeek::Stop
-        //             }
-        //         })
-        //     } else if !hit_word_char && c.is_whitespace() {
-        //         println!("HERE");
-        //         // If whitespace, then advance until the whitespace finishes, then resume the word
-        //         // checking logic
-        //         let seek_result = CursorSeek::advance_until(move |c, _i| {
-        //             if c.is_whitespace() {
-        //                 CursorSeek::Continue
-        //             } else {
-        //                 CursorSeek::Stop
-        //             }
-        //         });
-        //         stop = true;
-        //         seek_result
-        //     } else {
-        //         final_seek.clone()
-        //     }
+                /*
+                 * Go one char past end of current word (if any)
+                 */
+                Mode::One(starting_class) => {
+                    let current_class = vim_cls(c, is_big_word);
+                    println!("1. c={c} starting_class={starting_class} current_class={current_class}");
+
+                    if *starting_class != 0 && *starting_class == current_class {
+                        mode = Mode::Two;
+                        CursorSeek::Continue
+                    } else {
+                        CursorSeek::Continue
+                        // if (i == -1 || (i >= 1 && eol && count == 0))
+                        //     return OK;
+                    }
+                },
+
+                /*
+                 * go to next non-white
+                 */
+                Mode::Two => {
+                    let current_class = vim_cls(c, is_big_word);
+
+                    /*
+                     * We'll stop if we land on a blank line
+                     */
+                    // if (curwin->w_cursor.col == 0 && *ml_get_curline() == NUL)
+                    // break;
+
+                    if current_class == 0 {
+                        println!("space char!");
+                        CursorSeek::Done
+                    } else {
+                        CursorSeek::Continue
+                    }
+                },
+            }
         })
     }
 
-    pub fn advance_upper_word(inclusive: Inclusivity) -> Self {
+    // ref: https://github.com/JimZhouZZY/vim/blob/20df5aa89983c5c89a99c83e5837275d7a8c7137/src/textobject.c#L431
+    pub fn back_word(bigword: bool, stop: bool) -> Self {
+        #[derive(Debug)]
+        enum Mode {
+            Initial,
+            One(VimClass),
+            Two,
+            Three(VimClass),
+            Four,
+            Five,
+        }
+        let mut mode = Mode::Initial;
+
+        // From :h word -
+        // A word consists of a sequence of letters, digits and underscores, or a
+        // sequence of other non-blank characters, separated with white space (spaces,
+        // tabs, <EOL>).  This can be changed with the 'iskeyword' option.  An empty line
+        // is also considered to be a word.
+        // CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
+        CursorSeek::advance_until(move |c, _i| {
+            println!("-> {c}");
+            let a = match &mode {
+                Mode::Initial => {
+                    let starting_class = vim_cls(c, bigword);
+
+                    // Always advance at least one char
+                    mode = Mode::One(starting_class);
+                    CursorSeek::Continue
+                },
+                Mode::One(starting_class) => {
+                    let current_class = vim_cls(c, bigword);
+
+                    println!("1. c={c} starting_class={starting_class:?} current_class={current_class:?}");
+                    if !stop || *starting_class == current_class || *starting_class == 0 {
+                        // if (curwin->w_cursor.col == 0
+                        //               && LINEEMPTY(curwin->w_cursor.lnum))
+                        //     goto finished;
+                        mode = Mode::Two;
+                        CursorSeek::Continue
+                    } else {
+                        // overshot - forward one
+                        mode = Mode::Four;
+                        CursorSeek::Continue
+                    }
+                },
+
+                /*
+                 * Skip white space before the word.
+                 * Stop on an empty line.
+                 */
+                Mode::Two => {
+                    let current_class = vim_cls(c, bigword);
+                    println!("2. c={c} current_class={current_class:?}");
+
+                    if current_class == 0 {
+                        // if (curwin->w_cursor.col == 0
+                        //               && LINEEMPTY(curwin->w_cursor.lnum))
+                        //     goto finished;
+                        CursorSeek::Continue
+                        // if (dec_cursor() == -1) // hit start of file, stop here
+                        //     return OK;
+                        // }
+
+                        /*
+                         * Move backward to start of this word.
+                         */
+                        // if (skip_chars(cls(), BACKWARD))
+                        // return OK;
+                    } else {
+                        mode = Mode::Three(current_class);
+                        CursorSeek::Continue
+                    }
+                },
+
+                /*
+                 * Move backward to start of this word.
+                 */
+                Mode::Three(previous_class) => {
+                    // if (skip_chars(cls(), BACKWARD))
+                    // return OK;
+                    let current_class = vim_cls(c, bigword);
+                    println!("3. c={c} current_class={current_class:?}");
+
+                    if current_class == *previous_class {
+                        CursorSeek::Continue
+                    } else {
+                        mode = Mode::Four;
+                        CursorSeek::Continue
+                    }
+                },
+
+                // overshot - forward one
+                Mode::Four => {
+                    println!("4. c={c}");
+                    mode = Mode::Five;
+                    CursorSeek::ChangeDirection(Direction::Forwards)
+                }
+                Mode::Five => {
+                    println!("5. c={c}");
+                    CursorSeek::Done
+                }
+            };
+            a
+        })
+    }
+
+    pub fn advance_upper_word() -> Self {
         let mut hit_word_char = false;
 
         // From :h WORD -
@@ -199,7 +290,7 @@ impl CursorSeek {
                     }
                 })
             } else {
-                Inclusivity::to_cursor_seek(&inclusive)
+                CursorSeek::Done
             }
         })
     }
@@ -303,10 +394,10 @@ impl CursorSeek {
     /// When called, advance forwards to the start of the line - this implements '$'!
     ///
     /// NOTE: ONLY WORKS WHEN SEEKING FORWARDS!
-    pub fn advance_until_line_end(inclusive: Inclusivity) -> Self {
+    pub fn advance_until_line_end() -> Self {
         CursorSeek::advance_until_only(Direction::Forwards, move |c, _i| {
             if c == *NEWLINE {
-                Inclusivity::to_cursor_seek(&inclusive)
+                CursorSeek::Done
             } else {
                 CursorSeek::Continue
             }

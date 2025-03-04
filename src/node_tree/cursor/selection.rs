@@ -7,6 +7,8 @@ use crate::node_tree::{
 };
 use std::{cell::RefCell, rc::Rc, fmt::Debug};
 
+use super::CursorSeek;
+
 
 
 #[derive(Clone)]
@@ -32,7 +34,10 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         Self::new_from_cursor(cursor)
     }
     pub fn new_from_cursor(cursor: Cursor<TokenKind>) -> Self {
-        Self { secondary: cursor.clone(), primary: cursor }
+        Self::new_from_cursor_pair(cursor.clone(), cursor.clone())
+    }
+    pub fn new_from_cursor_pair(primary: Cursor<TokenKind>, secondary: Cursor<TokenKind>) -> Self {
+        Self { primary, secondary }
     }
 
     /// When called with a node, creates a new Selection that starts at the node and spans across
@@ -48,6 +53,37 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
         }
     }
 
+    pub fn perform<ClosureFn>(
+        self: &Self,
+        inclusivity: Inclusivity,
+        mut closure_fn: ClosureFn,
+    ) -> Self where ClosureFn: FnMut(Cursor<TokenKind>, Cursor<TokenKind>) -> (Cursor<TokenKind>, Cursor<TokenKind>) {
+        let (primary, secondary) = closure_fn(self.primary.clone(), self.secondary.clone());
+        let mut result = Self::new_from_cursor_pair(primary, secondary);
+
+        // From :help exclusive -
+        //
+        // A character motion is either inclusive or exclusive.  When inclusive, the
+        // start and end position of the motion are included in the operation.  When
+        // exclusive, the last character towards the end of the buffer is not included.
+        // Linewise motions always include the start and end position.
+        //
+        if inclusivity == Inclusivity::Exclusive {
+            let end = result.end_mut();
+            *end = end.seek_forwards(CursorSeek::AdvanceByCharCount(1));
+        }
+
+        result
+    }
+
+    pub fn perform_inclusive<ClosureFn>(self: &mut Self, closure_fn: ClosureFn) -> Self where ClosureFn: FnMut(Cursor<TokenKind>, Cursor<TokenKind>) -> (Cursor<TokenKind>, Cursor<TokenKind>) {
+        self.perform(Inclusivity::Inclusive, closure_fn)
+    }
+
+    pub fn perform_exclusive<ClosureFn>(self: &mut Self, closure_fn: ClosureFn) -> Self where ClosureFn: FnMut(Cursor<TokenKind>, Cursor<TokenKind>) -> (Cursor<TokenKind>, Cursor<TokenKind>) {
+        self.perform(Inclusivity::Exclusive, closure_fn)
+    }
+
     pub fn set_primary(self: &mut Self, input: Cursor<TokenKind>) -> &mut Self {
         self.primary = input;
         self
@@ -55,6 +91,15 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     pub fn set_secondary(self: &mut Self, input: Cursor<TokenKind>) -> &mut Self {
         self.secondary = input;
         self
+    }
+
+    /// Returns the cursor furthest to the end of the selection - either `self.primary` or `self.secondary`
+    pub fn end_mut(self: &mut Self) -> &mut Cursor<TokenKind> {
+        if self.primary > self.secondary {
+            &mut self.primary
+        } else {
+            &mut self.secondary
+        }
     }
 
     /// When called, computes the underlying literal text that the selection has covered.
@@ -310,5 +355,145 @@ impl<TokenKind: TokenKindTrait> Selection<TokenKind> {
     /// literal. NO REPARSE OCCURS.
     pub fn replace_raw(&self, literal: &str) -> Result<(), String> {
         self.splice(Some(literal.into()), false)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{languages, node_tree::{node::InMemoryNode, cursor::{CursorSeek, Cursor}, utils::{Inclusivity, Direction}}};
+    use super::Selection;
+
+    const LOREM_IPSUM: &'static str = concat!(
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum dignissim ",
+        "augue ac arcu convallis, a eleifend mauris blandit. Pellentesque molestie erat ",
+        "ex, et scelerisque magna ultrices a. Morbi porta mauris a nisl cursus luctus. ",
+        "Suspendisse dapibus accumsan dui, quis bibendum eros facilisis a. Orci varius ",
+        "natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. ",
+        "Suspendisse suscipit rutrum lobortis. Suspendisse suscipit ultrices gravida. Aenean",
+    );
+
+    #[test]
+    fn seek_forward_back_by_char() {
+        let root = InMemoryNode::<languages::raw::SyntaxKind>::new_from_parsed(LOREM_IPSUM);
+        // InMemoryNode::dump(&root);
+
+        let mut selection = Selection::new(root);
+        assert_eq!(selection.primary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+
+        // Forwards one char
+        let mut selection = selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(1)));
+        assert_eq!(selection.primary.to_rows_cols(), (1, 2));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "L");
+
+        // Forwards 10 chars
+        let mut selection = selection.set_primary(selection.primary.seek_forwards(CursorSeek::AdvanceByCharCount(10)));
+        assert_eq!(selection.primary.to_rows_cols(), (1, 12));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ipsum");
+
+        // Backwards 5 chars
+        let mut selection = selection.set_primary(selection.primary.seek_backwards(CursorSeek::AdvanceByCharCount(5)));
+        assert_eq!(selection.primary.to_rows_cols(), (1, 7));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ");
+
+        // Back to start
+        let mut selection = selection.set_primary(selection.primary.seek_backwards(CursorSeek::advance_until_start_end()));
+        assert_eq!(selection.primary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "");
+    }
+
+    #[test]
+    fn seek_forward_by_lower_word() {
+        let root = InMemoryNode::<languages::raw::SyntaxKind>::new_from_parsed(LOREM_IPSUM);
+        // InMemoryNode::dump(&root);
+
+        let mut selection = Selection::new(root);
+        assert_eq!(selection.primary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+
+        // Forwards one word INCLUSIVE
+        let mut selection = selection.perform_inclusive(move |primary, secondary| {
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 7));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ");
+
+        // Forwards one word EXCLUSIVE
+        let mut selection = selection.perform_exclusive(move |primary, secondary| {
+            let primary = primary.seek_forwards(CursorSeek::forwards_word(false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 14));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ipsum d");
+
+        // Forwards three words INCLUSIVE
+        println!("------");
+        let mut selection = selection.perform_inclusive(move |primary, secondary| {
+            let primary = primary
+                .seek_forwards(CursorSeek::forwards_word(false))
+                .seek_forwards(CursorSeek::forwards_word(false))
+                .seek_forwards(CursorSeek::forwards_word(false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 29));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ipsum dolor sit amet, ");
+
+        // Forwards two words EXCLUSIVE
+        println!("------");
+        let mut selection = selection.perform_exclusive(move |primary, secondary| {
+            let primary = primary
+                .seek_forwards(CursorSeek::forwards_word(false))
+                .seek_forwards(CursorSeek::forwards_word(false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 53));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 1));
+        assert_eq!(selection.literal(), "Lorem ipsum dolor sit amet, consectetur adipiscing e");
+    }
+
+    #[test]
+    fn seek_backward_by_lower_word() {
+        let root = InMemoryNode::<languages::raw::SyntaxKind>::new_from_parsed(LOREM_IPSUM);
+        // InMemoryNode::dump(&root);
+
+        // Start by seeking to a middle point in the input 52 chars in:
+        //
+        // > Lorem ipsum dolor sit amet, consectetur adipiscing elit
+        //                                                       ^ (right here!)
+        let mut selection = Selection::new(root);
+        let mut selection = selection.perform_inclusive(move |primary, secondary| {
+            let primary = primary.seek_forwards(CursorSeek::AdvanceByCharCount(52));
+            let secondary = secondary.seek_forwards(CursorSeek::AdvanceByCharCount(52));
+            (primary, secondary)
+        });
+        assert_eq!(selection.primary.to_rows_cols(), (1, 53));
+
+        println!("------");
+        // Backwards one word INCLUSIVE
+        let mut selection = selection.perform_inclusive(move |primary, secondary| {
+            let primary = primary.seek_backwards(CursorSeek::back_word(false, false));
+            (primary, secondary)
+        });
+        assert_eq!(selection.literal(), "adipiscing e");
+        assert_eq!(selection.primary.to_rows_cols(), (1, 41));
+        assert_eq!(selection.secondary.to_rows_cols(), (1, 53));
+
+        // // Backwards one word EXCLUSIVE
+        // let mut selection = selection.perform_exclusive(move |primary, secondary| {
+        //     let primary = primary.seek_backwards(CursorSeek::back_word(false, false));
+        //     (primary, secondary)
+        // });
+        // assert_eq!(selection.primary.to_rows_cols(), (1, 29));
+        // assert_eq!(selection.secondary.to_rows_cols(), (1, 54));
+        // assert_eq!(selection.literal(), "consectetur adipiscing el");
     }
 }

@@ -94,6 +94,7 @@ impl<TokenKind: TokenKindTrait> Cursor<TokenKind> {
         let mut row_counter = 1;
         let mut col_counter = 1;
 
+        println!("--------");
         let _ = self.seek_backwards_until(|c, _i| {
             if c == *NEWLINE {
                 // From that point on count each newline

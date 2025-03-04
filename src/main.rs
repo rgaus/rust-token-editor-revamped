@@ -65,10 +65,10 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
                 cursor = cursor.seek_backwards(CursorSeek::AdvanceByLines(1));
             },
             Some(Input::Character('w')) => {
-                cursor = cursor.seek_forwards(CursorSeek::advance_lower_word(Inclusivity::Inclusive));
+                cursor = cursor.seek_forwards(CursorSeek::forwards_word(false));
             },
             Some(Input::Character('b')) => {
-                cursor = cursor.seek_backwards(CursorSeek::advance_lower_word(Inclusivity::Exclusive));
+                cursor = cursor.seek_backwards(CursorSeek::forwards_word(false));
             },
 
             Some(Input::Character('%')) => {
@@ -82,7 +82,7 @@ fn interactive(root: Rc<RefCell<InMemoryNode<languages::typescript::SyntaxKind>>
                 cursor = cursor.seek_backwards(CursorSeek::advance_until_line_start_after_leading_whitespace());
             },
             Some(Input::Character('$')) => {
-                cursor = cursor.seek_forwards(CursorSeek::advance_until_line_end(Inclusivity::Exclusive));
+                cursor = cursor.seek_forwards(CursorSeek::advance_until_line_end());
             },
             Some(Input::Character('G')) => {
                 cursor = cursor.seek_forwards(CursorSeek::advance_until_start_end());

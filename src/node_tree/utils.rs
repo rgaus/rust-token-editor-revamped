@@ -6,17 +6,6 @@ pub enum Inclusivity {
     Exclusive,
 }
 
-impl Inclusivity {
-    /// Converts a given Inclusivity value into the CursorSeek that would be used
-    /// at the end of a seek of that type of inclusivity.
-    pub fn to_cursor_seek(&self) -> CursorSeek {
-        match self {
-            Inclusivity::Inclusive => CursorSeek::Done,
-            Inclusivity::Exclusive => CursorSeek::Stop,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Forwards,
@@ -94,5 +83,46 @@ pub fn is_delimiter(buffer: &[char]) -> Option<Delimiter> {
         [.., '#', 'e', 'n', 'd', 'i', 'f'] => Some(Delimiter::End(DelimiterType::CPreprocesserConditional, 6)),
 
         _ => None,
+    }
+}
+
+pub type VimClass = usize;
+/*
+ * cls() - returns the class of character at curwin->w_cursor
+ *
+ * If a 'W', 'B', or 'E' motion is being done (cls_bigword == TRUE), chars
+ * from class 2 and higher are reported as class 1 since only white space
+ * boundaries are of interest.
+ */
+pub fn vim_cls(c: char, cls_bigword: bool) -> VimClass {
+    if c == ' ' || c == '\t' || c == '\0' {
+        0
+    } else if c.len_utf8() > 1 {
+        // If cls_bigword, report multi-byte chars as class 1.
+        if cls_bigword {
+            1
+        } else {
+            // process code leading/trailing bytes
+            // TODO: https://github.com/vim/vim/blob/659cb28c25b756e59c712c337f8b4650e85f8bcd/src/mbyte.c#L863
+            // return dbcs_class(
+            //     ((unsigned)c >> 8), (c & 0xFF)
+            // );
+            3
+        }
+    // } else if (enc_utf8) {
+    //     // TODO: https://github.com/vim/vim/blob/659cb28c25b756e59c712c337f8b4650e85f8bcd/src/mbyte.c#L2901
+    //     let c = 2 // utf_class(c);
+    //     if c != 0 && cls_bigword {
+    //         1
+    //     } else {
+    //         c
+    //     }
+    } else if (cls_bigword) {
+        // If cls_bigword is TRUE, report all non-blanks as class 1.
+        1
+    } else if (is_lower_word_char(c)) {
+        2
+    } else {
+        1
     }
 }
